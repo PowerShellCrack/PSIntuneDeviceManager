@@ -1,94 +1,105 @@
-# PSIntuneDeviceRenamer
-Rename a HAADJ device in Intune
+# PSIntuneDeviceManagerUI
+Manage Intune devices
 
-**WORK-IN-PROGRESS** This is still in development. 
+**WORK-IN-PROGRESS** This is still in development.
+
+
+**NEW** Intune Device Manager UI was built to allow more management or Intune devices besides just renaming
 
 ## Here is how you use it:
 To launch the script; its best to call it through PowerShell, like so:
 
+```powershell
+.\IntuneDeviceManagerUI.ps1
+
+.\IntuneDeviceManagerUI.ps1 -AppConnect
+```
+
 The script will check for prerequisites:
 
+- PowerShell 5.1 or higher
 - MSGraph Intune module
 - Azure AD
 - RSAT Tools/PowerShell Module
-- If its ran on a Domain joined device
-- If PowerShell is version 5.1 or higher
+    - If its ran on a Domain joined device
 
-It will attempt to install them (from internet)…so if it’s not ran as privilege administrator; it may fail. You will see them as red in the bottom status bar in the UI
 
-Once all prereqs are installed and everything shows green in the status bar (besides MSGraph Connected), you can continue. 
+It will prompt to install them (from internet)…so if it’s not ran as privilege administrator; it may fail. You will see them as red in the bottom status bar in the UI
+![Modules](/.images/IDMWindow_installmodule.jpg)
 
-I wrote the script to output data while it launches the UI. You will see that in the console window, it will also provide a working log in the UI (not external)
+> Once all prereqs are installed and everything shows green in the status bar (besides MSGraph Connected), you can continue. If not restart app after install
 
 Once the UI is launched, here are the steps to perform:
+![Launch](/.images/IDMWindow_Initial.jpg)
 
-1.	Click the button:  Connect to Intune (MSGraph)
-![Connect](/.images/connect.PNG)
+1. Click the button:  Connect to Intune (MSGraph)
 
-a.	This will minimize the UI and request your Azure login. 
-b.	You will be required to accept the “allow permissions to read and write to Intune”. Scroll down and click Accept
-c.	You may have to brin the UI back up from the task bar. I tried to get to restore window, but sometimes it does not. 
 
-2.	Once its connected, it will immediately start pulling Windows AAD devices into the list. 
-a.	This is preconfigured to filter anything other than Windows. 
-NOTE: this may take a bit, depending on device count. The UI may look like its not responding (its not a multithreaded UI). Please let me know how long it took to retrieve the device and count.
+a.	This will minimize the UI and request your Azure login
+b.	You will be required to accept the "allow permissions to read and write to Intune". Scroll down and click Accept
+c.	You may have to brin the UI back up from the task bar. I tried to get to restore window, but sometimes it does not.
 
-3.	You can search the device in the search window (it will filter as you type). 
+> If you created a application principal account, and use -AppConnect parameter, the prompt is slightly different
+![AppConnect](/.images/IDMWindow_AppConnect.jpg)
 
-4.	Once you select click the object, the script will grab the user information from Azure AD and it will attempt to find the corresponding object in AD.
-a.	You will see the Assigned User in the right area. 
 
-5.	Click on the Sync button to corollate the Azure account with the AD account. 
+2.	Once its connected, it will immediately start pulling Windows AAD devices into the list.
+a.	This is preconfigured to filter anything other than Windows.
+NOTE: this may take a bit, depending on device count. The UI may look like its not responding (its not a multithreaded UI...yet).
+![Connect](/.images/IDMWindow_Connected.jpg)
+
+3.	You can search the device in the search window (it will filter as you type).
+
+4.	Once you select a device, the script will grab the detailed device and user information from Azure AD.
+![Selected](/.images/IDMWindow_SelectedDevice.jpg)
+
+## For Rename Operations
+
+1. Click Reammer Tab
+
+2.	Click on the Sync button to corelate the Azure account with the AD account.
 a.	If the account is found, the accounts distinguished name will appear below.
-b.	And it will auto generate the name as well (based on rules set) 
+b.	And it will auto generate the name as well (based on rules set)
 
-6.	The auto generated name, will use the Generation rules specified in the configure tab
-a.	This is preconfigured to use your naming convention but can be changed. * 
+3.	The auto generated name, will use the Generation rules specified in the configure tab
+a.	This is pre-configured to use your naming convention but can be changed. *
 b.	If you change the rules, click the Sync button to refresh the name
 
-7.	Select the move to OU checkbox to move the AD object to another OU. 
-a.	This is preconfigured to the root computers OU. This can be changed in configure tab. 
+4.	Select the move to OU checkbox to move the AD object to another OU.
+a.	This is pre-configured to the root computers OU. This can be changed in configure tab.
 
-8.	Click Rename Device. 
+5.	Click Rename Device.
 WARNING: this will attempt to rename the Intune object and not in AD.
-a.	If you refresh the list and select the same device again; a warning message will come up near bottom of screen stating there is a pending rename action. 
-b.	You can also check Intune and see the same action. 
+a.	If you refresh the list and select the same device again; a warning message will come up near bottom of screen stating there is a pending rename action.
+b.	You can also check Intune and see the same action.
+
+## For Retrieving Assignments
+1. Select a device
+
+2. Click Details Tab
+
+3. Click Get Assignments
+NOTE: this may take a while to load, depending on objects in Intune and Azure. The UI may look like its not responding (its not a multithreaded UI...yet). Once complete though a screen will come up:
+![Selected](/.images/IDMWindow_Assignments.jpg)
+
+4. This list can further be searched of filtered. It can also be exported to CSV
 
 
-Intune message after rename
+
+## Features that don’t exist or do not work just yet:
+- Progressbar during assignment loading or device retrieval
+- Alternate AD credentials
+- Option to not increment name
+- *All Generation Methods except "User OU Name"
+- ** Azure government support not working
+- *** Some logging is missing
 
 
-You will receive a message it is successfully renamed. 
 
 
-A notification will display, If you click on the same device after rename
 
-
-Here is an error that the AD object cannot be found
-
-
-The configure screen is pretty complex but I wanted to make it more universal. Its preconfigured with your environment in mind and with a few tweaks to the options it may support changes in the future. 
-It does have a rule tester that can be used to test OU based name generation.
- 
-
-
-The pre-configurations can be changes when calling script with parameters **
- 
-
-There is also a logging tab that will allow you to view the work being done. ***
-
-I was also unable to test chassis function to pull correct letter for laptop or workstation. Let me know if this works. 
-
-Features that don’t work just yet:
-•	Alternate AD credentials
-•	Option to not increment name
-•	*All Generation Methods except “User OU Name”
-•	** Azure government support not working
-•	*** Some logging is missing
-
-
-Even though I have tested this to the extend that I could I want to ensure your aware of Microsoft’s position on developing scripts. 
-This is usually what come along with the scripts:
+# DISCLAIMER
+> Even though I have tested this to the extend that I could I want to ensure your aware of Microsoft’s position on developing scripts.
 
 This Sample Code is provided for the purpose of illustration only and is not
 intended to be used in a production environment.  THIS SAMPLE CODE AND ANY
