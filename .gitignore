@@ -4,3 +4,4 @@
 /.vscode/*
 *.code-workspace
 *.zip
+Tests.ps1

@@ -1,5 +1,5 @@
 # PSIntuneDeviceRenamer
-Manage Devices in Intune
+Rename a HAADJ device in Intune
 
 **WORK-IN-PROGRESS** This is still in development. 
 

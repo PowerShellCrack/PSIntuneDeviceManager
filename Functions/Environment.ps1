@@ -1,3 +1,72 @@
+
+#region FUNCTION: Check if running in ISE
+Function Test-IsISE {
+    # try...catch accounts for:
+    # Set-StrictMode -Version latest
+    try {
+        return ($null -ne $psISE);
+    }
+    catch {
+        return $false;
+    }
+}
+#endregion
+
+#region FUNCTION: Check if running in Visual Studio Code
+Function Test-VSCode{
+    if($env:TERM_PROGRAM -eq 'vscode') {
+        return $true;
+    }
+    Else{
+        return $false;
+    }
+}
+#endregion
+
+#region FUNCTION: Find script path for either ISE or console
+Function Get-ScriptPath {
+    <#
+        .SYNOPSIS
+            Finds the current script path even in ISE or VSC
+        .LINK
+            Test-VSCode
+            Test-IsISE
+    #>
+    param(
+        [switch]$Parent
+    )
+
+    Begin{}
+    Process{
+        if ($PSScriptRoot -eq "")
+        {
+            if (Test-IsISE)
+            {
+                $ScriptPath = $psISE.CurrentFile.FullPath
+            }
+            elseif(Test-VSCode){
+                $context = $psEditor.GetEditorContext()
+                $ScriptPath = $context.CurrentFile.Path
+            }Else{
+                $ScriptPath = (Get-location).Path
+            }
+        }
+        else
+        {
+            $ScriptPath = $PSCommandPath
+        }
+    }
+    End{
+
+        If($Parent){
+            Split-Path $ScriptPath -Parent
+        }Else{
+            $ScriptPath
+        }
+    }
+}
+#endregion
+
 function Confirm-Elevated {
     $UserWP = New-Object Security.Principal.WindowsPrincipal( [Security.Principal.WindowsIdentity]::GetCurrent( ) )
     try {
@@ -120,7 +189,7 @@ Function Get-RandomNumericString {
 
 Function Test-IsDomainJoined{
     param(
-	    [switch]$PassThru 
+	    [switch]$PassThru
 	)
     ## Variables: Domain Membership
     [boolean]$IsMachinePartOfDomain = (Get-WmiObject -Class 'Win32_ComputerSystem' -ErrorAction 'SilentlyContinue').PartOfDomain
@@ -172,7 +241,7 @@ Function Get-WellKnownOU{
     $a = [adsisearcher]'(&(objectclass=domain))'
     $a.SearchScope = 'base'
     $a.FindOne().properties.wellknownobjects | ForEach-Object {
-        
+
         if ($_ -match ('^' + $ObjectID + ':(.*)$'))
         {
             #$matches[1]
@@ -195,25 +264,18 @@ Function Resolve-ActualPath{
         [string]$WorkingPath,
         [Switch]$Parent
     )
-    ## Get the name of this function
-    [string]${CmdletName} = $MyInvocation.MyCommand
 
-    Write-LogEntry ("Attempting to resolve filename: {0}" -f $FileName) -Source ${CmdletName} -Severity 1
-    If(Resolve-Path $FileName -ErrorAction SilentlyContinue){
-        $FullPath = Resolve-Path $FileName
+    Try{
+        $FullPath = Resolve-Path $FileName -ErrorAction Stop
     }
-    #If unable to resolve the file path try building path from workign path location
-    Else{
+    Catch{
         $FullPath = Join-Path -Path $WorkingPath -ChildPath $FileName
     }
 
-    Write-LogEntry ("Attempting to resolve with full path: {0}" -f $FullPath) -Source ${CmdletName} -Severity 1
-    #Try to resolve the path one more time using the fullpath set
     Try{
         $ResolvedPath = Resolve-Path $FullPath -ErrorAction $ErrorActionPreference
     }
     Catch{
-        Write-LogEntry ("Unable to resolve path: {0}: {1}" -f $FullPath,$_.Exception.Message) -Source ${CmdletName} -Severity 3
         Throw ("{0}" -f $_.Exception.Message)
     }
     Finally{
@@ -227,7 +289,6 @@ Function Resolve-ActualPath{
 }
 
 Function Get-CMSiteCode{
-    [CmdletBinding()]
     param(
         [string]$ComputerName = 'localhost'
     )
@@ -235,6 +296,6 @@ Function Get-CMSiteCode{
         $([WmiClass]"\\$ComputerName\ROOT\ccm:SMS_Client").getassignedsite() | Select -ExpandProperty sSiteCode
     }
     Catch{
-        $null
+
     }
 }

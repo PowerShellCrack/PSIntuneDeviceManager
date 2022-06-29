@@ -7,7 +7,7 @@
 
 .NOTES
     Author		: Dick Tracy II <richard.tracy@microsoft.com>
-	Source	    : 
+	Source	    :
     Version		: 1.1.5
     #Requires -Version 3.0
 #>
@@ -132,6 +132,7 @@ If($PSBoundParameters.ContainsKey('Offline')){$OfflineMode = $true}Else{$Offline
 . "$FunctionPath\Logging.ps1"
 . "$FunctionPath\Environment.ps1"
 . "$FunctionPath\DeviceInfo.ps1"
+. "$FunctionPath\MSgraph.ps1"
 . "$FunctionPath\Intune.ps1"
 . "$FunctionPath\UIControls.ps1"
 
@@ -441,7 +442,7 @@ If(-Not(Test-RSATModule) -or -Not(Test-IsDomainJoined)){
 
 #load default rules
 If($null -ne $Rules){
-    (Get-UIVariable "txtRuleRegex" -Wildcard) | Set-UIFieldElement -Enable:$true -ErrorAction SilentlyContinue
+    (Get-UIVariable "txtRuleRegex" -Wildcard) | Set-UIElement -Enable:$true -ErrorAction SilentlyContinue
     $ui_chkDoRegex.IsChecked = $true
     $ui_txtRuleRegex1.text = $Rules['RuleRegex1']
     $ui_txtRuleRegex2.text = $Rules['RuleRegex2']
@@ -449,7 +450,7 @@ If($null -ne $Rules){
     $ui_txtRuleRegex4.text = $Rules['RuleRegex4']
 }Else{
     $ui_chkDoRegex.IsChecked = $false
-    (Get-UIVariable "txtRuleRegex" -Wildcard) | Set-UIFieldElement -Enable:$false -ErrorAction SilentlyContinue
+    (Get-UIVariable "txtRuleRegex" -Wildcard) | Set-UIElement -Enable:$false -ErrorAction SilentlyContinue
 }
 
 $ui_txtRulePrefix.text = $Prefix
@@ -542,11 +543,11 @@ $ui_txtSearchIntuneDevices.Add_LostFocus({
 })
 
 $ui_chkDoRegex.add_Checked({
-    (Get-UIVariable "txtRuleRegex" -Wildcard) | Set-UIFieldElement -Enable:$true -ErrorAction SilentlyContinue
+    (Get-UIVariable "txtRuleRegex" -Wildcard) | Set-UIElement -Enable:$true -ErrorAction SilentlyContinue
 })
 $ui_chkDoRegex.add_Unchecked({
-    (Get-UIVariable "txtRuleRegex" -Wildcard) | Set-UIFieldElement -Enable:$false -ErrorAction SilentlyContinue
-    #(Get-UIVariable "txtRuleRegex" -Wildcard) | Set-UIFieldElement -text $null -ErrorAction SilentlyContinue
+    (Get-UIVariable "txtRuleRegex" -Wildcard) | Set-UIElement -Enable:$false -ErrorAction SilentlyContinue
+    #(Get-UIVariable "txtRuleRegex" -Wildcard) | Set-UIElement -text $null -ErrorAction SilentlyContinue
 })
 
 
@@ -620,9 +621,9 @@ $ui_listIntuneDevices.Add_SelectionChanged({
     $ui_txtSelectedDevice.text = $ui_listIntuneDevices.SelectedItem
     If($ui_listIntuneDevices.SelectedItem.length -gt 0){
         $Global:DeviceInfo = $Global:ManagedDevices | Where {$_.deviceName -eq $ui_listIntuneDevices.SelectedItem}
-        $AADUserId = Get-ManagedDeviceUser -DeviceID $Global:DeviceInfo.id -AuthToken $Global:AuthToken
-        $DeviceStatus = Get-ManagedDevicePendingActions -DeviceID $Global:DeviceInfo.id -AuthToken $Global:AuthToken
-        $AADUser = Get-AADUser -UPN $AADUserId -AuthToken $Global:AuthToken
+        $AssignedUserId = Get-IDMDeviceAssignedUser -DeviceID $Global:DeviceInfo.id -AuthToken $Global:AuthToken
+        $DeviceStatus = Get-IDMDevicePendingActions -DeviceID $Global:DeviceInfo.id -AuthToken $Global:AuthToken
+        $AADUser = Get-IDMDeviceAADUser -Id $AssignedUserId -AuthToken $Global:AuthToken
         #check if system running device is joined to the domain and has RSAT tools installed
         If(Test-RSATModule -and Test-IsDomainJoined)
         {
@@ -719,12 +720,12 @@ If($AppConnect){
 #action for button
 $ui_btnMSGraphConnect.Add_Click({
     #minimize the UI to allow for login
-     
+
     If($AppConnect){
         If([string]::IsNullOrEmpty($AppSecret) ){
             Write-UIOutput -UIObject $ui_Logging -Message "Unable to retrieve app secret." -Type Start -Passthru
         }
-        $Global:AuthToken = Connect-MSGraphApp -AppId $ApplicationId -TenantId $AppTenantId -AppSecret $ui_pwdAppSecret.Password
+        $Global:AuthToken = Connect-MSGraphAsAnApp -AppId $ApplicationId -TenantId $AppTenantId -AppSecret $ui_pwdAppSecret.Password
         #build object to simulate connection checks
         $IntuneConnection = "" | Select UPN,TenantId
         $IntuneConnection.UPN = $ApplicationId
@@ -757,17 +758,17 @@ $ui_btnMSGraphConnect.Add_Click({
     If($null -ne $Global:AuthToken){
         #grab all managed devices
         If($FilterDeviceOS){
-            $DeviceParams = @{AuthToken=$Global:AuthToken;FilterOS=$FilterDeviceOS}
+            $DeviceParams = @{AuthToken=$Global:AuthToken;Platform=$FilterDeviceOS}
         }Else{
             $DeviceParams = @{AuthToken=$Global:AuthToken}
         }
-        $Global:ManagedDevices = Get-ManagedDevices @DeviceParams  # | Select deviceName,model,complianceState,deviceEnrollmentType,operatingSystem
+        $Global:ManagedDevices = @(Get-IDMDevices @DeviceParams)  # | Select deviceName,model,complianceState,deviceEnrollmentType,operatingSystem
         If($Global:ManagedDevices.count -gt 0)
         {
             $ui_btnRefreshList.IsEnabled = $true
             $ui_btnRename.IsEnabled =$true
             $ui_txtRenameStatus.Text = ''
-            Add-UIDeviceList -ItemsList $Global:ManagedDevices -ListObject $ui_listIntuneDevices -Identifier 'deviceName'
+            Add-UIList -ItemsList $Global:ManagedDevices -ListObject $ui_listIntuneDevices -Identifier 'deviceName'
 
             #ACTIVATE LIVE SEARCH
             $ui_txtSearchIntuneDevices.AddHandler(
@@ -804,7 +805,7 @@ $ui_btnRefreshList.Add_Click(
             If($ui_txtSearchIntuneDevices.Text -ne 'Search...'){
                 Search-UIDeviceList -ItemsList $Global:ManagedDevices -ListObject $ui_listIntuneDevices -Identifier 'deviceName' -filter $ui_txtSearchIntuneDevices.Text
             }Else{
-                Add-UIDeviceList -ItemsList $Global:ManagedDevices -ListObject $ui_listIntuneDevices -Identifier 'deviceName'
+                Add-UIList -ItemsList $Global:ManagedDevices -ListObject $ui_listIntuneDevices -Identifier 'deviceName'
             }
         }
     }
@@ -874,7 +875,7 @@ $ui_btnUserSync.Add_Click({
     IF($ui_txtRuleRegex2.text){$Rules['RuleRegex2'] = $ui_txtRuleRegex2.text}Else{$Rules.Remove('RuleRegex2')}
     IF($ui_txtRuleRegex3.text){$Rules['RuleRegex3'] = $ui_txtRuleRegex3.text}Else{$Rules.Remove('RuleRegex3')}
     IF($ui_txtRuleRegex4.text){$Rules['RuleRegex4'] = $ui_txtRuleRegex4.text}Else{$Rules.Remove('RuleRegex4')}
-    
+
     #BUILD NEW COMPUTER NAME using query string and Query Rules
     $ComputerSample = @{Query=$QueryString;RegexRules=$Rules}
     If($ui_txtRuleAbbrKey.Text.Length -gt 0){$ComputerSample += @{device=$ui_listIntuneDevices.SelectedItem;AbbrKey=$ui_txtRuleAbbrKey.text}}
@@ -952,7 +953,7 @@ $ui_btnCMDeviceSync.Add_Click({
 $ui_btnRename.Add_Click({
     #attempt to rename object in Intune
     Try{
-        Invoke-DeviceAction -AuthToken $Global:AuthToken -DeviceID $Global:DeviceInfo.id -Action Rename -NewDeviceName $ui_txtNewDeviceName.Text -ErrorAction Stop
+        Invoke-IDMDeviceAction -AuthToken $Global:AuthToken -DeviceID $Global:DeviceInfo.id -Action Rename -NewDeviceName $ui_txtNewDeviceName.Text -ErrorAction Stop
         $ui_txtRenameStatus.Text = 'Successfully renamed device.'
         $ui_txtRenameStatus.Foreground = 'Green'
         $MoveableObject = $true

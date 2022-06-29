@@ -1,216 +1,4 @@
-Function Connect-MSGraphApp {
-    <#TEST
-    $ApplicationId ="21d133d2-75eb-4241-9247-febde41f4463"
-    $AppTenantId = "2ec9dcf0-b109-434a-8bcd-238a3bf0c6b2"
-    $AppId = $ApplicationId
-    $TenantID = $AppTenantId
-    $Global:AppSecret = "5.V7Q~RHqawIkS3nNaCTg.Opwwm~RNTxxg2D."
-    $AppSecret = $Global:AppSecret
-    #>
-    #https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal#create-a-new-application-secret
-    [cmdletbinding()]
-    param
-    (
-        [Parameter(Mandatory=$true)]
-        $AppId,
-        [Parameter(Mandatory=$true)]
-        $TenantID,
-        [Parameter(Mandatory=$true)]
-        $AppSecret
-    )
-    try {
-        #convert secret into creds
-        $azurePassword = ConvertTo-SecureString $AppSecret -AsPlainText -Force
-        $psCred = New-Object System.Management.Automation.PSCredential($AppId , $azurePassword)
-
-        #connect to Azure using App service principal
-        Connect-AzAccount -Credential $psCred -TenantId $TenantID -ServicePrincipal | Out-Null
-
-        #Grab the Azure context which will include Azure Token
-        $context = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile.DefaultContext
-        $aadToken = [Microsoft.Azure.Commands.Common.Authentication.AzureSession]::Instance.AuthenticationFactory.Authenticate($context.Account, `
-                                                $context.Environment, $context.Tenant.Id.ToString(), $null, [Microsoft.Azure.Commands.Common.Authentication.ShowDialog]::Never, `
-                                                $null, "https://graph.windows.net").AccessToken
-
-        #Attempt to connect to Azure Ad using token
-        #Connect-AzureAD -AadAccessToken $aadToken -AccountId $context.Account.Id -TenantId $context.tenant.id | Out-Null
-
-        $Body = @{
-            Grant_Type    = "client_credentials"
-            Scope         = "https://graph.microsoft.com/.default"
-            client_Id     = $AppId
-            Client_Secret = $AppSecret
-        }
-        $ConnectGraph = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$TenantID/oauth2/v2.0/token" -Method POST -Body $Body
-        $token = $ConnectGraph.access_token
-        #format the date correctly
-        $ExpiresOnMinutes = $ConnectGraph.expires_in / 60
-        $ExpiresOn = (Get-Date).AddMinutes($ExpiresOnMinutes).ToString("M/d/yyyy hh:mm tt +00:00")
-
-        # Creating header for Authorization token
-        $authHeader = @{
-            'Content-Type'='application/json'
-            'Authorization'="Bearer " + $token
-            'ExpiresOn'=$ExpiresOn
-        }
-        return $authHeader
-    }
-    Catch{
-        write-host $_.Exception.Message -f Red
-        write-host $_.Exception.ItemName -f Red
-        write-host
-        break
-    }
-}
-
-function Get-AuthToken{
-
-    <#
-    .SYNOPSIS
-    This function is used to authenticate with the Graph API REST interface
-    .DESCRIPTION
-    The function authenticate with the Graph API Interface with the tenant name
-    .EXAMPLE
-    Get-AuthToken
-    Authenticates you with the Graph API interface
-    .NOTES
-    NAME: Get-AuthToken
-    #>
-    [cmdletbinding()]
-    param
-    (
-        [Parameter(Mandatory=$true)]
-        [System.Net.Mail.MailAddress]$User
-    )
-
-    $userUpn = New-Object "System.Net.Mail.MailAddress" -ArgumentList $User
-    $tenant = $userUpn.Host
-
-    Write-Host "Checking for AzureAD module..."
-    $AadModule = Get-Module -Name "AzureAD" -ListAvailable
-
-    if ($AadModule -eq $null) {
-        write-host
-        write-host "AzureAD Powershell module not installed..." -f Red
-        write-host "Install by running 'Install-Module AzureAD' from an elevated PowerShell prompt" -f Yellow
-        write-host "Script can't continue..." -f Red
-        write-host
-        exit
-    }
-
-    # Getting path to ActiveDirectory Assemblies
-    # If the module count is greater than 1 find the latest version
-    if($AadModule.count -gt 1)
-    {
-        $Latest_Version = ($AadModule | select version | Sort-Object)[-1]
-        $aadModule = $AadModule | ? { $_.version -eq $Latest_Version.version }
-        # Checking if there are multiple versions of the same module found
-        if($AadModule.count -gt 1){
-            $aadModule = $AadModule | select -Unique
-        }
-        $adal = Join-Path $AadModule.ModuleBase "Microsoft.IdentityModel.Clients.ActiveDirectory.dll"
-        $adalforms = Join-Path $AadModule.ModuleBase "Microsoft.IdentityModel.Clients.ActiveDirectory.Platform.dll"
-    }
-
-    else {
-        $adal = Join-Path $AadModule.ModuleBase "Microsoft.IdentityModel.Clients.ActiveDirectory.dll"
-        $adalforms = Join-Path $AadModule.ModuleBase "Microsoft.IdentityModel.Clients.ActiveDirectory.Platform.dll"
-    }
-    
-    #$adal = Join-Path $AadModule.ModuleBase "Microsoft.IdentityModel.Clients.ActiveDirectory.dll"
-    #$adalforms = Join-Path $AadModule.ModuleBase "Microsoft.IdentityModel.Clients.ActiveDirectory.Platform.dll"
-
-    [System.Reflection.Assembly]::LoadFrom($adal) | Out-Null
-    [System.Reflection.Assembly]::LoadFrom($adalforms) | Out-Null
-    $clientId = "d1ddf0e4-d672-4dae-b554-9d5bdfd93547"
-    $redirectUri = "urn:ietf:wg:oauth:2.0:oob"
-    $resourceAppIdURI = "https://graph.microsoft.com"
-    $authority = "https://login.microsoftonline.com/$Tenant"
-
-    try {
-        $authContext = New-Object "Microsoft.IdentityModel.Clients.ActiveDirectory.AuthenticationContext" -ArgumentList $authority
-
-        # https://msdn.microsoft.com/en-us/library/azure/microsoft.identitymodel.clients.activedirectory.promptbehavior.aspx
-        # Change the prompt behavior to force credentials each time: Auto, Always, Never, RefreshSession
-        $platformParameters = New-Object "Microsoft.IdentityModel.Clients.ActiveDirectory.PlatformParameters" -ArgumentList "Auto"
-        $userId = New-Object "Microsoft.IdentityModel.Clients.ActiveDirectory.UserIdentifier" -ArgumentList ($User, "OptionalDisplayableId")
-        $authResult = $authContext.AcquireTokenAsync($resourceAppIdURI,$clientId,$redirectUri,$platformParameters,$userId).Result
-
-        # If the accesstoken is valid then create the authentication header
-        if($authResult.AccessToken){
-
-            # Creating header for Authorization token
-            $authHeader = @{
-                'Content-Type'='application/json'
-                'Authorization'="Bearer " + $authResult.AccessToken
-                'ExpiresOn'=$authResult.ExpiresOn
-            }
-            return $authHeader
-        }
-        else {
-            Write-Host
-            Write-Host "Authorization Access Token is null, please re-run authentication..." -ForegroundColor Red
-            Write-Host
-            break
-        }
-    }
-
-    catch {
-        write-host $_.Exception.Message -f Red
-        write-host $_.Exception.ItemName -f Red
-        write-host
-        break
-    }
-}
-
-#https://github.com/smcavinue/AdminSeanMc/blob/master/Graph%20Scripts/graph-RefreshAccessToken.ps1
-function Refresh-AccessToken{
-    <#
-    .SYNOPSIS
-    Refreshes an access token based on refresh token
-    .RETURNS
-        Returns a refreshed access token
-    .PARAMETER Token
-        -Token is the existing refresh token
-    .PARAMETER tenantID
-        -This is the tenant ID eg. domain.onmicrosoft.com
-    .PARAMETER ClientID
-        -This is the app reg client ID
-    .PARAMETER Secret
-        -This is the client secret
-    .PARAMETER Scope
-        -A comma delimited list of access scope, default is: "Group.ReadWrite.All,User.ReadWrite.All"
-    
-    #>
-    Param(
-        [parameter(Mandatory = $true)]
-        [String]
-        $Token,
-        [parameter(Mandatory = $true)]
-        [String]
-        $tenantID,
-        [parameter(Mandatory = $true)]
-        [String]
-        $ClientID,
-        [parameter(Mandatory = $false)]
-        [String]
-        $Scope = "Group.ReadWrite.All,User.ReadWrite.All",
-        [parameter(Mandatory = $true)]
-        [String]
-        $Secret
-    )
-
-$ScopeFixup = $Scope.replace(',','%20')
-$apiUri = "https://login.microsoftonline.com/$tenantID/oauth2/v2.0/token"
-$body = "client_id=$ClientID&scope=$ScopeFixup&refresh_token=$Token&redirect_uri=http%3A%2F%2Flocalhost%2F&grant_type=refresh_token&client_secret=$Secret"
-write-verbose $body -Verbose
-$Refreshedtoken = (Invoke-RestMethod -Uri $apiUri -Method Post -ContentType 'application/x-www-form-urlencoded' -body $body  )
-
-return $Refreshedtoken
-
-}
-
-Function Get-ManagedDevices{
+Function Get-IDMDevices{
 
     <#
     .SYNOPSIS
@@ -218,62 +6,62 @@ Function Get-ManagedDevices{
     .DESCRIPTION
     The function connects to the Graph API Interface and gets any Intune Managed Device
     .EXAMPLE
-    Get-ManagedDevices
+    Get-IDMDevices
     Returns all managed devices but excludes EAS devices registered within the Intune Service
     .EXAMPLE
-    Get-ManagedDevices -IncludeEAS
+    Get-IDMDevices -IncludeEAS
     Returns all managed devices including EAS devices registered within the Intune Service
     .NOTES
-    NAME: Get-ManagedDevices
+    NAME: Get-IDMDevices
     #>
 
     [cmdletbinding()]
-
     param
     (
-        $AuthToken,
-        [switch]$IncludeEAS,
-        [switch]$ExcludeMDM,
+        [Parameter(Mandatory=$false)]
         [ValidateSet('Windows','Android','MacOS','iOS')]
-        [string]$FilterOS
+        [string]$Platform,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$IncludeEAS,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$ExcludeMDM,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$Expand,
+
+        [Parameter(Mandatory=$false)]
+        $AuthToken = $Global:AuthToken
     )
 
     # Defining Variables
     $graphApiVersion = "beta"
     $Resource = "deviceManagement/managedDevices"
+    $Count_Params = 0
+
+    if($IncludeEAS.IsPresent){ $Count_Params++ }
+    if($ExcludeMDM.IsPresent){ $Count_Params++ }
+
+    if($Count_Params -gt 1){
+        write-error "Multiple parameters set, specify a single parameter -IncludeEAS, -ExcludeMDM or no parameter against the function"
+    }
+
+    elseif($IncludeEAS){
+        $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource"
+    }
+
+    elseif($ExcludeMDM){
+        $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource`?`$filter=managementAgent eq 'eas'"
+    }
+    else {
+        $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource`?`$filter=managementAgent eq 'mdm' and managementAgent eq 'easmdm'"
+        Write-Warning "EAS Devices are excluded by default, please use -IncludeEAS if you want to include those devices"
+    }
 
     try {
-        $Count_Params = 0
-
-        if($IncludeEAS.IsPresent){ $Count_Params++ }
-        if($ExcludeMDM.IsPresent){ $Count_Params++ }
-
-        if($Count_Params -gt 1){
-            write-warning "Multiple parameters set, specify a single parameter -IncludeEAS, -ExcludeMDM or no parameter against the function"
-            Write-Host
-            break
-        }
-        elseif($IncludeEAS){
-            $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource"
-        }
-
-        elseif($ExcludeMDM){
-            $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource`?`$filter=managementAgent eq 'eas'"
-        }
-
-        else {
-            $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource`?`$filter=managementAgent eq 'mdm' and managementAgent eq 'easmdm'"
-            Write-Warning "EAS Devices are excluded by default, please use -IncludeEAS if you want to include those devices"
-            Write-Host
-        }
-        $devices = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).Value
-
-        If($PSBoundParameters.ContainsKey('FilterOS')){
-        }
-            return $devices | Where{ $_.operatingSystem -eq $FilterOS}
-        Else{
-            return $devices
-        }
+        Write-Verbose "Get $uri"
+        $Response = Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get -ErrorAction Stop
     }
     catch {
         $ex = $_.Exception
@@ -284,14 +72,116 @@ Function Get-ManagedDevices{
         $responseBody = $reader.ReadToEnd();
         Write-Host "Response content:`n$responseBody" -f Red
         Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
-        write-host
-        break
+    }
+
+
+    If($Expand)
+    {
+        $Devices = @()
+        $AADObjects = Get-IDMAzureDevices -AuthToken $AuthToken
+        #TEST $Item = $Response.Value | Where deviceName -eq 'DTOLAB-46VEYL1'
+        Foreach($Item in $Response.Value)
+        {
+            $OutputItem = New-Object PSObject
+            Foreach($p in $Item | Get-Member -MemberType NoteProperty){
+                $OutputItem | Add-Member NoteProperty $p.name -Value $Item.($p.name)
+            }
+            #$AADObjects | Where displayName -eq 'DTOLAB-46VEYL1'
+            If($FilteredObj = $AADObjects | Where deviceId -eq $Item.azureADDeviceId){
+                # Create a new object to store this information
+                $OutputItem | Add-Member NoteProperty "azureADObjectId" -Value $FilteredObj.id -Force
+                $OutputItem | Add-Member NoteProperty "accountEnabled" -Value $FilteredObj.accountEnabled -Force
+                $OutputItem | Add-Member NoteProperty "deviceVersion" -Value $FilteredObj.deviceVersion -Force
+                $OutputItem | Add-Member NoteProperty "enrollmentProfileName" -Value $FilteredObj.enrollmentProfileName -Force
+                $OutputItem | Add-Member NoteProperty "enrollmentType" -Value $FilteredObj.enrollmentType -Force
+                $OutputItem | Add-Member NoteProperty "isCompliant" -Value $FilteredObj.isCompliant -Force
+                $OutputItem | Add-Member NoteProperty "mdmAppId" -Value $FilteredObj.mdmAppId -Force
+                $OutputItem | Add-Member NoteProperty "physicalIds" -Value $FilteredObj.physicalIds -Force
+                $OutputItem | Add-Member NoteProperty "extensionAttributes " -Value $FilteredObj.extensionAttributes -Force
+                # Add the object to our array of output objects
+            }
+            $Devices += $OutputItem
+        }
+    }
+    Else{
+        $Devices = $Response.Value
+    }
+
+
+    If($PSBoundParameters.ContainsKey('Platform')){
+        return $Devices | Where{ $_.operatingSystem -eq $Platform}
+    }
+    Else{
+        return $Devices
+    }
+
+}
+
+Function Get-IDMAzureDevices{
+<#
+    .SYNOPSIS
+    This function is used to get Azure Devices from the Graph API REST interface
+    .DESCRIPTION
+    The function connects to the Graph API Interface and gets any Azure Device
+
+    #>
+
+    [cmdletbinding()]
+    param
+    (
+
+        [Parameter(Mandatory=$false)]
+        [ValidateSet('DisplayName','StartWithDisplayName','NOTStartWithDisplayName')]
+        [string]$FilterBy,
+
+        [Parameter(Mandatory=$false)]
+        [string]$Filter,
+
+        [Parameter(Mandatory=$false)]
+        $AuthToken = $Global:AuthToken
+    )
+    Begin{
+        # Defining Variables
+        $graphApiVersion = "beta"
+        $Resource = "devices"
+        If($FilterBy -and $Filter){
+            switch($FilterBy){
+                'DisplayName' {$uri = "https://graph.microsoft.com/beta/devices?`$filter=displayName eq '$Filter'"}
+
+                'StartWithDisplayName' {$uri = "https://graph.microsoft.com/beta/devices?`$filter=startswith(displayName, '$Filter')"}
+
+                'NOTStartWithDisplayName'{ $uri = "https://graph.microsoft.com/beta/devices?`$filter=NOT startsWith(displayName, '$Filter')"}
+            }
+
+        }Else{
+            $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource"
+        }
+
+    }
+    Process{
+        try {
+            Write-Verbose "Get $uri"
+            $Response = Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get -ErrorAction Stop
+        }
+        catch {
+            $ex = $_.Exception
+            $errorResponse = $ex.Response.GetResponseStream()
+            $reader = New-Object System.IO.StreamReader($errorResponse)
+            $reader.BaseStream.Position = 0
+            $reader.DiscardBufferedData()
+            $responseBody = $reader.ReadToEnd();
+            Write-Host "Response content:`n$responseBody" -f Red
+            Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
+        }
+    }
+    End{
+        return $Response.Value
     }
 
 }
 
 
-Function Get-ManagedDevicePendingActions{
+Function Get-IDMDevicePendingActions{
 
     <#
     .SYNOPSIS
@@ -299,45 +189,50 @@ Function Get-ManagedDevicePendingActions{
     .DESCRIPTION
     The function connects to the Graph API Interface and gets a managed device pending actions
     .EXAMPLE
-    Get-ManagedDeviceUser -DeviceID $DeviceID
+
     Returns a managed device user registered in Intune
     .NOTES
-    NAME: Get-ManagedDeviceUser
+    NAME:
     #>
 
     [cmdletbinding()]
-
     param
     (
-        $AuthToken,
-        [Parameter(Mandatory=$true,HelpMessage="DeviceID (guid) for the device on must be specified:")]
-        $DeviceID
+        [Parameter(Mandatory=$True,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true,HelpMessage="DeviceID (guid) for the device on must be specified:")]
+        $DeviceID,
+
+        [Parameter(Mandatory=$false)]
+        $AuthToken = $Global:AuthToken
     )
-
-    # Defining Variables
-    $graphApiVersion = "beta"
-    $Resource = "deviceManagement/manageddevices/$DeviceID"
-
-    try {
-        $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)"
-        Write-Verbose $uri
-        (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).deviceActionResults
+    Begin{
+        # Defining Variables
+        $graphApiVersion = "beta"
     }
-    catch {
-        $ex = $_.Exception
-        $errorResponse = $ex.Response.GetResponseStream()
-        $reader = New-Object System.IO.StreamReader($errorResponse)
-        $reader.BaseStream.Position = 0
-        $reader.DiscardBufferedData()
-        $responseBody = $reader.ReadToEnd();
-        Write-Host "Response content:`n$responseBody" -f Red
-        Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
-        write-host
-        break
+    Process{
+        $Resource = "deviceManagement/manageddevices/$DeviceID"
+
+        try {
+            $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)"
+            Write-Verbose "Get $uri"
+            $response = Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get -ErrorAction Stop
+        }
+        catch {
+            $ex = $_.Exception
+            $errorResponse = $ex.Response.GetResponseStream()
+            $reader = New-Object System.IO.StreamReader($errorResponse)
+            $reader.BaseStream.Position = 0
+            $reader.DiscardBufferedData()
+            $responseBody = $reader.ReadToEnd();
+            Write-Host "Response content:`n$responseBody" -f Red
+            Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
+        }
+    }
+    End{
+        return $response.deviceActionResults
     }
 }
 
-Function Get-ManagedDeviceUser{
+Function Get-IDMDeviceAssignedUser{
 
     <#
     .SYNOPSIS
@@ -345,46 +240,53 @@ Function Get-ManagedDeviceUser{
     .DESCRIPTION
     The function connects to the Graph API Interface and gets a managed device users registered with Intune MDM
     .EXAMPLE
-    Get-ManagedDeviceUser -DeviceID $DeviceID
+    Get-IDMDeviceAssignedUser -DeviceID $DeviceID
     Returns a managed device user registered in Intune
     .NOTES
-    NAME: Get-ManagedDeviceUser
+    NAME: Get-IDMDeviceAssignedUser
     #>
 
     [cmdletbinding()]
-
     param
     (
-        $AuthToken,
-        [Parameter(Mandatory=$true,HelpMessage="DeviceID (guid) for the device on must be specified:")]
-        $DeviceID
+        [Parameter(Mandatory=$True,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true)]
+        [Parameter(HelpMessage="DeviceID (guid) for the device on must be specified:")]
+        $DeviceID,
+
+        [Parameter(Mandatory=$false)]
+        $AuthToken = $Global:AuthToken
     )
-
-    # Defining Variables
-    $graphApiVersion = "beta"
-    $Resource = "deviceManagement/manageddevices('$DeviceID')?`$select=userId"
-
-    try {
-        $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)"
-        Write-Verbose "Get $uri"
-        (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).userId
+    Begin{
+        # Defining Variables
+        $graphApiVersion = "beta"
     }
-    catch {
-        $ex = $_.Exception
-        $errorResponse = $ex.Response.GetResponseStream()
-        $reader = New-Object System.IO.StreamReader($errorResponse)
-        $reader.BaseStream.Position = 0
-        $reader.DiscardBufferedData()
-        $responseBody = $reader.ReadToEnd();
-        Write-Host "Response content:`n$responseBody" -f Red
-        Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
-        write-host
-        break
+    Process{
+        $Resource = "deviceManagement/manageddevices('$DeviceID')?`$select=userId"
+
+        try {
+            $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)"
+            Write-Verbose "Get $uri"
+            $response = Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get -ErrorAction Stop
+        }
+        catch {
+            $ex = $_.Exception
+            $errorResponse = $ex.Response.GetResponseStream()
+            $reader = New-Object System.IO.StreamReader($errorResponse)
+            $reader.BaseStream.Position = 0
+            $reader.DiscardBufferedData()
+            $responseBody = $reader.ReadToEnd();
+            Write-Host "Response content:`n$responseBody" -f Red
+            Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
+        }
+    }
+    End{
+        return $response.userId
     }
 }
 
+
 #region
-Function Get-AADUser{
+Function Get-IDMDeviceAADUser{
 
     <#
     .SYNOPSIS
@@ -392,50 +294,116 @@ Function Get-AADUser{
     .DESCRIPTION
     The function connects to the Graph API Interface and gets any users registered with AAD
     .EXAMPLE
-    Get-AADUser
+    Get-IDMDeviceAADUser
     Returns all users registered with Azure AD
     .EXAMPLE
-    Get-AADUser -userPrincipleName user@domain.com
+    Get-IDMDeviceAADUser -userPrincipleName user@domain.com
     Returns specific user by UserPrincipalName registered with Azure AD
     .NOTES
-    NAME: Get-AADUser
+    NAME: Get-IDMDeviceAADUser
+    https://docs.microsoft.com/en-us/graph/api/user-get?view=graph-rest-1.0&tabs=http
     #>
 
-    [cmdletbinding()]
+    [CmdletBinding(DefaultParameterSetName='ID')]
+    Param
+    (
+        [Parameter(Mandatory=$True,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true,ParameterSetName='ID')]
+        [string]$Id,
 
+        [Parameter(Mandatory=$True,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true,ParameterSetName='UPN')]
+        [Alias('User','EMail')]
+        [System.Net.Mail.MailAddress]$UPN,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateSet('id','userPrincipalName','surname','officeLocation','mail','displayName','givenName')]
+        [String]$Property,
+
+        [Parameter(Mandatory=$false)]
+        $AuthToken = $Global:AuthToken
+    )
+    Begin{
+        # Defining Variables
+        $graphApiVersion = "beta"
+        $User_resource = "users"
+    }
+    Process{
+        If ($PSCmdlet.ParameterSetName -eq "ID"){
+            $QueryBy = $Id
+        }
+        If ($PSCmdlet.ParameterSetName -eq "UPN"){
+            $QueryBy = $UPN
+        }
+        try {
+            #Grab All directory syncd users
+            #$uri = "https://graph.microsoft.com/$graphApiVersion/$($User_resource)/?`$filter=onPremisesSyncEnabled+eq+true"
+            #$DirUsers = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).Value
+
+            if([string]::IsNullOrEmpty($QueryBy))
+            {
+                $uri = "https://graph.microsoft.com/$graphApiVersion/$($User_resource)"
+                Write-Verbose $uri
+                $Response = Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get -ErrorAction Stop
+            }
+            else {
+                if([string]::IsNullOrEmpty($Property)){
+                    $uri = "https://graph.microsoft.com/$graphApiVersion/$($User_resource)/$QueryBy"
+                    Write-Verbose $uri
+                    $Response = Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get -ErrorAction Stop
+                }
+                else {
+                    $uri = "https://graph.microsoft.com/$graphApiVersion/$($User_resource)/$QueryBy/$Property"
+                    Write-Verbose $uri
+                    $Response = Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get -ErrorAction Stop
+                }
+            }
+        }
+        catch {
+            $ex = $_.Exception
+            $errorResponse = $ex.Response.GetResponseStream()
+            $reader = New-Object System.IO.StreamReader($errorResponse)
+            $reader.BaseStream.Position = 0
+            $reader.DiscardBufferedData()
+            $responseBody = $reader.ReadToEnd();
+            Write-Host "Response content:`n$responseBody" -f Red
+            Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
+        }
+    }
+    End{
+        return $response
+    }
+}
+
+
+Function Get-IDMDeviceCategory{
+    <#
+    .SYNOPSIS
+    Gets Device Category details.
+
+    .DESCRIPTION
+    The Get-IDMDeviceCategory cmdlet returns either a list of all categories for the current Azure AD tenant, or information for the specific profile specified by its ID.
+
+   .EXAMPLE
+    Get a list of all Device Categories.
+
+    Get-IDMDeviceCategory
+    #>
+    [cmdletbinding()]
     param
     (
-        $AuthToken,
-        [Alias('User')]
-        [System.Net.Mail.MailAddress]$UPN,
-        [ValidateSet('id','userPrincipalName','surname','officeLocation','mail','displayName','givenName')]
-        [String]$Property
+        [Parameter(Mandatory=$false)]
+        $AuthToken = $Global:AuthToken
     )
 
     # Defining Variables
-    $graphApiVersion = "v1.0"
-    $User_resource = "users"
+    $graphApiVersion = "beta"
+    $Resource = "deviceManagement/deviceCategories"
+
+    $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource"
 
     try {
-        if($UPN -eq "" -or $UPN -eq $null)
-        {
-            $uri = "https://graph.microsoft.com/$graphApiVersion/$($User_resource)"
-            (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).Value
-        }
-        else {
-            if($Property -eq "" -or $Property -eq $null){
-                $uri = "https://graph.microsoft.com/$graphApiVersion/$($User_resource)/$UPN"
-                Write-Verbose $uri
-                Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get
-            }
-            else {
-                $uri = "https://graph.microsoft.com/$graphApiVersion/$($User_resource)/$UPN/$Property"
-                Write-Verbose $uri
-                (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).Value
-            }
-        }
+        Write-Verbose "GET $uri"
+        $response = Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get
     }
-
     catch {
         $ex = $_.Exception
         $errorResponse = $ex.Response.GetResponseStream()
@@ -445,178 +413,259 @@ Function Get-AADUser{
         $responseBody = $reader.ReadToEnd();
         Write-Host "Response content:`n$responseBody" -f Red
         Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
-        write-host
-        break
+    }
+    Finally{
+        $response.Value
     }
 }
 
 
+Function Set-IDMDeviceCategory{
+    <#
+    .SYNOPSIS
+    Sets Device Category
 
-Function Invoke-DeviceAction{
+    .DESCRIPTION
+    The Set-IDMDeviceCategory cmdlet sets the category of device ID
+
+    .EXAMPLE
+    Set-IDMDeviceCategory -DeviceID '08d06b3b-8513-417b-80ee-9dc8a3beb377' -Category 'Standard Device'
+
+    .LINK
+    Get-IDMDeviceCategory
+    #>
+    [cmdletbinding()]
+    param
+    (
+        [Parameter(Mandatory=$true)]
+        $DeviceID,
+
+        [Parameter(Mandatory=$true)]
+        $Category,
+
+        [Parameter(Mandatory=$false)]
+        $AuthToken = $Global:AuthToken
+    )
+
+    # Defining Variables
+    $graphApiVersion = "beta"
+    $Resource = "deviceManagement/managedDevices"
+
+    $Categories = Get-IDMDeviceCategory -AuthToken $AuthToken
+    $CategoryId = ($Categories | Where displayName -eq $Category).id
+
+    #$requestBody = @{ "@odata.id" = "https://graph.microsoft.com/$graphApiVersion/deviceManagement/deviceCategories/3137f37d-ff7c-48ec-af57-d4404faf844e" }
+    $requestBody = @{ "@odata.id" = "https://graph.microsoft.com/$graphApiVersion/deviceManagement/deviceCategories/$CategoryId" }
+    $BodyJson = $requestBody | ConvertTo-Json
+
+    #$uri = "https://graph.microsoft.com/beta/deviceManagement/managedDevices/08d06b3b-8513-417b-80ee-9dc8a3beb377/deviceCategory/`$ref"
+    $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource/$DeviceID/deviceCategory/`$ref"
+
+    try {
+        Write-Verbose "GET $uri"
+        $null = Invoke-RestMethod -Uri $uri -Headers $AuthToken -Body $BodyJson -Method PUT
+    }
+    catch {
+        $ex = $_.Exception
+        $errorResponse = $ex.Response.GetResponseStream()
+        $reader = New-Object System.IO.StreamReader($errorResponse)
+        $reader.BaseStream.Position = 0
+        $reader.DiscardBufferedData()
+        $responseBody = $reader.ReadToEnd();
+        Write-Host "Response content:`n$responseBody" -f Red
+        Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
+    }
+}
+
+
+Function Invoke-IDMDeviceAction{
     <#
     .SYNOPSIS
     This function is used to set a generic intune resources from the Graph API REST interface
     .DESCRIPTION
     The function connects to the Graph API Interface and sets a generic Intune Resource
     .EXAMPLE
-    Invoke-DeviceAction -DeviceID $DeviceID -remoteLock
+    Invoke-IDMDeviceAction -DeviceID $DeviceID -remoteLock
     Resets a managed device passcode
     .NOTES
-    NAME: Invoke-DeviceAction
+    NAME: Invoke-IDMDeviceAction
     #>
 
-    [cmdletbinding()]
-
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact='Medium')]
     param
     (
-        $AuthToken,
-        [Parameter(Mandatory=$true,HelpMessage="DeviceId (guid) for the Device you want to take action on must be specified:")]
+        [Parameter(Mandatory=$True,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true,HelpMessage="DeviceId (guid) for the Device you want to take action on must be specified:")]
         $DeviceID,
+
         [Parameter(Mandatory=$true)]
         [ValidateSet('RemoteLock','ResetPasscode','Wipe','Retire','Delete','Sync','Rename')]
         $Action,
-        $Force,
+
+        [switch]$Force,
+
         $NewDeviceName,
-        [switch]$WhatIf
+
+        [Parameter(Mandatory=$false)]
+        $AuthToken = $Global:AuthToken
     )
+    Begin{
+        ## Get the name of this function
+        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
 
-    $graphApiVersion = "Beta"
+        if (-not $PSBoundParameters.ContainsKey('Verbose')) {
+            $VerbosePreference = $PSCmdlet.SessionState.PSVariable.GetValue('VerbosePreference')
+        }
 
-    try {
-        switch($Action){
+        if (-not $PSBoundParameters.ContainsKey('Confirm')) {
+            $ConfirmPreference = $PSCmdlet.SessionState.PSVariable.GetValue('ConfirmPreference')
+        }
 
-            'RemoteLock'
-            {
-                $Resource = "deviceManagement/managedDevices/$DeviceID/remoteLock"
-                $uri = "https://graph.microsoft.com/$graphApiVersion/$($resource)"
-                write-verbose $uri
-                Write-Verbose "Sending remoteLock command to $DeviceID"
-                Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Post
-            }
+        if (-not $PSBoundParameters.ContainsKey('WhatIf')) {
+            $WhatIfPreference = $PSCmdlet.SessionState.PSVariable.GetValue('WhatIfPreference')
+        }
+        $graphApiVersion = "Beta"
+    }
+    Process{
+        try {
+            switch($Action){
 
-            'ResetPasscode'
-            {
-                if($WhatIf){
-                    Write-Host "Reset of the Passcode for the device $DeviceID was cancelled..."
-                }
-                else {
-                    write-host "Reseting the Passcode this device..."
-                    $Resource = "deviceManagement/managedDevices/$DeviceID/resetPasscode"
+                'RemoteLock'
+                {
+                    $Resource = "deviceManagement/managedDevices/$DeviceID/remoteLock"
                     $uri = "https://graph.microsoft.com/$graphApiVersion/$($resource)"
                     write-verbose $uri
-                    Write-Verbose "Sending remotePasscode command to $DeviceID"
+                    Write-Verbose "Sending remoteLock command to $DeviceID"
                     Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Post
                 }
-            }
 
-            'Wipe'
-            {
-
-                if($WhatIf){
-                    Write-Host "Wipe of the device $DeviceID was cancelled..."
-                }
-                else {
-                    write-host "Wiping this device..."
-                    $Resource = "deviceManagement/managedDevices/$DeviceID/wipe"
-                    $uri = "https://graph.microsoft.com/$graphApiVersion/$($resource)"
-                    write-verbose $uri
-                    Write-Verbose "Sending wipe command to $DeviceID"
-                    Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Post
-                }
-            }
-
-            'Retire'
-            {
-                if($WhatIf){
-                    Write-Host "Retire of the device $DeviceID was cancelled..."
-                }
-                else {
-                    write-host "Retiring this device..."
-                    $Resource = "deviceManagement/managedDevices/$DeviceID/retire"
-                    $uri = "https://graph.microsoft.com/$graphApiVersion/$($resource)"
-                    write-verbose $uri
-                    Write-Verbose "Sending retire command to $DeviceID"
-                    Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Post
-                }
-            }
-
-            'Delete'
-            {
-                Write-Warning "A deletion of a device will only work if the device has already had a retire or wipe request sent to the device..."
-
-                if($WhatIf){
-                    Write-Host "Deletion of the device $DeviceID was cancelled..."
-                }
-                else {
-                    write-host "Deleting this device..."
-                    $Resource = "deviceManagement/managedDevices('$DeviceID')"
-                    $uri = "https://graph.microsoft.com/$graphApiVersion/$($resource)"
-                    write-verbose $uri
-                    Write-Verbose "Sending delete command to $DeviceID"
-                    Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Delete
-
-                }
-            }
-
-            'Sync'
-            {
-
-                if($WhatIf){
-                    Write-Host "Sync of the device $DeviceID was cancelled..."
-                }
-                else {
-                    $Resource = "deviceManagement/managedDevices('$DeviceID')/syncDevice"
-                    $uri = "https://graph.microsoft.com/$graphApiVersion/$($resource)"
-                    write-verbose $uri
-                    Write-Verbose "Sending sync command to $DeviceID"
-                    Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Post
-                }
-            }
-
-            'Rename'
-            {
-                if($WhatIf){
-                    Write-Host "Rename of the device $DeviceID was cancelled..."
-                }
-                else {
-                    If($Null -eq $NewDeviceName){Break}
-
-                    $JSON = @"
+                'ResetPasscode'
+                {
+                    If($WhatIfPreference)
                     {
-                        deviceName:"$($NewDeviceName)"
+                        Write-Host "Reset of the Passcode for the device $DeviceID was cancelled..."
                     }
-"@
-                    $Resource = "deviceManagement/managedDevices('$DeviceID')/setDeviceName"
-                    $uri = "https://graph.microsoft.com/$graphApiVersion/$($resource)"
-                    write-verbose $uri
-                    Write-Verbose "Sending rename command to $DeviceID"
-                    Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Post -Body $Json -ContentType "application/json"
+                    else {
+                        write-host "Resetting the Passcode this device..."
+                        $Resource = "deviceManagement/managedDevices/$DeviceID/resetPasscode"
+                        $uri = "https://graph.microsoft.com/$graphApiVersion/$($resource)"
+                        write-verbose $uri
+                        Write-Verbose "Sending remotePasscode command to $DeviceID"
+                        Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Post
+                    }
                 }
+
+                'Wipe'
+                {
+
+                    If($WhatIfPreference)
+                    {
+                        Write-Host "Wipe of the device $DeviceID was cancelled..."
+                    }
+                    else {
+                        write-host "Wiping this device..."
+                        $Resource = "deviceManagement/managedDevices/$DeviceID/wipe"
+                        $uri = "https://graph.microsoft.com/$graphApiVersion/$($resource)"
+                        write-verbose $uri
+                        Write-Verbose "Sending wipe command to $DeviceID"
+                        Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Post
+                    }
+                }
+
+                'Retire'
+                {
+                    If($WhatIfPreference)
+                    {
+                        Write-Host "Retire of the device $DeviceID was cancelled..."
+                    }
+                    else {
+                        write-host "Retiring this device..."
+                        $Resource = "deviceManagement/managedDevices/$DeviceID/retire"
+                        $uri = "https://graph.microsoft.com/$graphApiVersion/$($resource)"
+                        write-verbose $uri
+                        Write-Verbose "Sending retire command to $DeviceID"
+                        Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Post
+                    }
+                }
+
+                'Delete'
+                {
+                    Write-Warning "A deletion of a device will only work if the device has already had a retire or wipe request sent to the device..."
+
+                    If($WhatIfPreference)
+                    {
+                        Write-Host "Deletion of the device $DeviceID was cancelled..."
+                    }
+                    else {
+                        write-host "Deleting this device..."
+                        $Resource = "deviceManagement/managedDevices('$DeviceID')"
+                        $uri = "https://graph.microsoft.com/$graphApiVersion/$($resource)"
+                        write-verbose $uri
+                        Write-Verbose "Sending delete command to $DeviceID"
+                        Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Delete
+
+                    }
+                }
+
+                'Sync'
+                {
+
+                    If($WhatIfPreference)
+                    {
+                        Write-Host "Sync of the device $DeviceID was cancelled..."
+                    }
+                    else {
+                        $Resource = "deviceManagement/managedDevices('$DeviceID')/syncDevice"
+                        $uri = "https://graph.microsoft.com/$graphApiVersion/$($resource)"
+                        write-verbose $uri
+                        Write-Verbose "Sending sync command to $DeviceID"
+                        Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Post
+                    }
+                }
+
+                'Rename'
+                {
+                    If($WhatIfPreference)
+                    {
+                        Write-Host "Rename of the device $DeviceID was cancelled..."
+                    }
+                    else {
+                        If($Null -eq $NewDeviceName){Break}
+
+                        $JSON = @"
+                        {
+                            deviceName:"$($NewDeviceName)"
+                        }
+"@
+                        $Resource = "deviceManagement/managedDevices('$DeviceID')/setDeviceName"
+                        $uri = "https://graph.microsoft.com/$graphApiVersion/$($resource)"
+                        write-verbose $uri
+                        Write-Verbose "Sending rename command to $DeviceID"
+                        Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Post -Body $Json -ContentType "application/json"
+                    }
+                }
+
             }
 
-            default {
-                write-host "No parameter set, specify -RemoteLock -ResetPasscode -Wipe -Delete -Sync or -rename against the function" -f Red
-            }
+        }
+        catch {
+            $ex = $_.Exception
+            $errorResponse = $ex.Response.GetResponseStream()
+            $reader = New-Object System.IO.StreamReader($errorResponse)
+            $reader.BaseStream.Position = 0
+            $reader.DiscardBufferedData()
+            $responseBody = $reader.ReadToEnd();
+            Write-Host "Response content:`n$responseBody" -f Red
+            Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
         }
     }
-    catch {
-        $ex = $_.Exception
-        $errorResponse = $ex.Response.GetResponseStream()
-        $reader = New-Object System.IO.StreamReader($errorResponse)
-        $reader.BaseStream.Position = 0
-        $reader.DiscardBufferedData()
-        $responseBody = $reader.ReadToEnd();
-        Write-Host "Response content:`n$responseBody" -f Red
-        Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
-        write-host
-        break
-    }
+
+
 }
 
 
 
 
-Function Set-ManagedDevice{
+Function Set-IDMManagedDevice{
 
     <#
     .SYNOPSIS
@@ -624,202 +673,850 @@ Function Set-ManagedDevice{
     .DESCRIPTION
     The function connects to the Graph API Interface and sets a Managed Device property
     .EXAMPLE
-    Set-ManagedDevice -id $id -ownerType company
+    Set-IDMManagedDevice -id $Id -ownerType company
     Returns Managed Devices configured in Intune
     .NOTES
-    NAME: Set-ManagedDevice
+    NAME: Set-IDMManagedDevice
     #>
 
     [cmdletbinding()]
 
     param
     (
-        $id,
-        $ownertype
+        [Parameter(Mandatory=$True,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true)]
+        $Id,
+
+        [Parameter(Mandatory=$True,ValueFromPipelineByPropertyName=$true)]
+        [ValidateSet('Personal','Company')]
+        $OwnerType,
+
+        [Parameter(Mandatory=$false)]
+        $AuthToken = $Global:AuthToken,
+
+        [Parameter(Mandatory=$false)]
+        $Force
     )
-
-    $graphApiVersion = "Beta"
-    $Resource = "deviceManagement/managedDevices"
-
-    try {
-        if($id -eq "" -or $id -eq $null){
-            write-host "No Device id specified, please provide a device id..." -f Red
-            break
+    Begin{
+        $graphApiVersion = "Beta"
+        $Resource = "deviceManagement/managedDevices"
+        $JSON = @"
+        {
+            ownerType:"$($OwnerType)"
         }
-
-        if($ownerType -eq "" -or $ownerType -eq $null){
-            write-host "No ownerType parameter specified, please provide an ownerType. Supported value personal or company..." -f Red
-            Write-Host
-            break
-        }
-        elseif($ownerType -eq "company"){
-
-            $JSON = @"
-            {
-                ownerType:"company"
-            }
 "@
-            write-host
-            write-host "Are you sure you want to change the device ownership to 'company' on this device? Y or N?"
-            $Confirm = read-host
-
-            if($Confirm -eq "y" -or $Confirm -eq "Y"){
-                # Send Patch command to Graph to change the ownertype
-                $uri = "https://graph.microsoft.com/beta/deviceManagement/managedDevices('$ID')"
-                Invoke-RestMethod -Uri $uri -Headers $authToken -Method Patch -Body $Json -ContentType "application/json"
-            }
-            else {
-                Write-Host "Change of Device Ownership for the device $ID was cancelled..." -ForegroundColor Yellow
-                Write-Host
-            }
-        }
-        elseif($ownerType -eq "personal"){
-            $JSON = @"
-            {
-                ownerType:"personal"
-            }
-"@
-            write-host
-            write-host "Are you sure you want to change the device ownership to 'personal' on this device? Y or N?"
-            $Confirm = read-host
-
-            if($Confirm -eq "y" -or $Confirm -eq "Y"){
-                # Send Patch command to Graph to change the ownertype
-                $uri = "https://graph.microsoft.com/beta/deviceManagement/managedDevices('$ID')"
-                Invoke-RestMethod -Uri $uri -Headers $authToken -Method Patch -Body $Json -ContentType "application/json"
-            }
-            else {
-                Write-Host "Change of Device Ownership for the device $ID was cancelled..." -ForegroundColor Yellow
-                Write-Host
-            }
-        }
     }
-    catch {
-        $ex = $_.Exception
-        $errorResponse = $ex.Response.GetResponseStream()
-        $reader = New-Object System.IO.StreamReader($errorResponse)
-        $reader.BaseStream.Position = 0
-        $reader.DiscardBufferedData()
-        $responseBody = $reader.ReadToEnd();
-        Write-Host "Response content:`n$responseBody" -f Red
-        Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
-        write-host
-        break
+    Process{
+        If(!$Force)
+        {
+            write-host ("Are you sure you want to change the device ownership to '{0}' on this device? [Y or N]" -f $OwnerType)
+            $Confirm = read-host
+
+            if($Confirm -ne "y" -and $Confirm -ne "Y"){
+                Write-Host ("Change of Device Ownership for the device {0} was cancelled..." -f $Id) -ForegroundColor Yellow
+                Continue
+            }
+        }
+
+        try {
+            # Send Patch command to Graph to change the ownertype
+            $uri = "https://graph.microsoft.com/beta/deviceManagement/managedDevices('$Id')"
+            Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Patch -Body $Json -ContentType "application/json"
+        }
+        catch {
+            $ex = $_.Exception
+            $errorResponse = $ex.Response.GetResponseStream()
+            $reader = New-Object System.IO.StreamReader($errorResponse)
+            $reader.BaseStream.Position = 0
+            $reader.DiscardBufferedData()
+            $responseBody = $reader.ReadToEnd();
+            Write-Host "Response content:`n$responseBody" -f Red
+            Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
+        }
     }
 }
 
 
-Function Get-IntuneAutopilotDevice{
-    <#
-    .SYNOPSIS
-    Gets devices currently registered with Windows Autopilot.
-     
-    .DESCRIPTION
-    The Get-AutopilotDevice cmdlet retrieves either the full list of devices registered with Windows Autopilot for the current Azure AD tenant, or a specific device if the ID of the device is specified.
-     
-    .PARAMETER id
-    Optionally specifies the ID (GUID) for a specific Windows Autopilot device (which is typically returned after importing a new device)
-     
-    .PARAMETER serial
-    Optionally specifies the serial number of the specific Windows Autopilot device to retrieve
-    
-    .PARAMETER expand
-    Expand the properties of the device to include the Autopilot profile information
 
-    .EXAMPLE
-    Get a list of all devices registered with Windows Autopilot
-     
-    Get-AutopilotDevice
-    #>
-        [cmdletbinding()]
-        param
-        (
-            [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$True)] $id,
-            [Parameter(Mandatory=$false)] $serial,
-            [Parameter(Mandatory=$false)] [Switch]$expand = $false
-        )
-    
-        Process {
-    
-            # Defining Variables
-            $graphApiVersion = "beta"
-            $Resource = "deviceManagement/windowsAutopilotDeviceIdentities"
-        
-            if ($id -and $expand) {
-                $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)/$($id)?`$expand=deploymentProfile,intendedDeploymentProfile"
+Function Remove-IDMDeviceRecords{
+    [CmdletBinding(DefaultParameterSetName='All')]
+    Param
+    (
+        [Parameter(ParameterSetName='All',Mandatory=$true,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true)]
+        [Parameter(ParameterSetName='Individual',Mandatory=$true,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true)]
+        $ComputerName,
+        [Parameter(ParameterSetName='All')]
+        [switch]$All,
+        [Parameter(ParameterSetName='Individual')]
+        [switch]$AD,
+        [Parameter(ParameterSetName='Individual')]
+        [switch]$AAD,
+        [Parameter(ParameterSetName='Individual')]
+        [switch]$Intune,
+        [Parameter(ParameterSetName='Individual')]
+        [switch]$Autopilot,
+        [Parameter(ParameterSetName='Individual')]
+        [switch]$ConfigMgr
+    )
+
+    Set-Location $env:SystemDrive
+
+    # Load required modules
+    If ($PSBoundParameters.ContainsKey("AAD") -or $PSBoundParameters.ContainsKey("Intune") -or $PSBoundParameters.ContainsKey("Autopilot") -or $PSBoundParameters.ContainsKey("ConfigMgr") -or $PSBoundParameters.ContainsKey("All"))
+    {
+        Try
+        {
+            Write-host "Importing modules…" -NoNewline
+            If ($PSBoundParameters.ContainsKey("AAD") -or $PSBoundParameters.ContainsKey("Intune") -or $PSBoundParameters.ContainsKey("Autopilot") -or $PSBoundParameters.ContainsKey("All"))
+            {
+                Import-Module Microsoft.Graph.Intune -ErrorAction Stop
             }
-            elseif ($id) {
-                $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)/$id"
+            If ($PSBoundParameters.ContainsKey("AAD") -or $PSBoundParameters.ContainsKey("All"))
+            {
+                Import-Module AzureAD -ErrorAction Stop
             }
-            elseif ($serial) {
-                $encoded = [uri]::EscapeDataString($serial)
-                $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)?`$filter=contains(serialNumber,'$encoded')"
+            If ($PSBoundParameters.ContainsKey("ConfigMgr") -or $PSBoundParameters.ContainsKey("All"))
+            {
+                Import-Module $env:SMS_ADMIN_UI_PATH.Replace('i386','ConfigurationManager.psd1') -ErrorAction Stop
             }
-            else {
-                $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)"
+            Write-host "Success" -ForegroundColor Green
+        }
+        Catch
+        {
+            Write-host "$($_.Exception.Message)" -ForegroundColor Red
+            Return
+        }
+    }
+
+    # Authenticate with Azure
+    If ($PSBoundParameters.ContainsKey("AAD") -or $PSBoundParameters.ContainsKey("Intune") -or $PSBoundParameters.ContainsKey("Autopilot") -or $PSBoundParameters.ContainsKey("All"))
+    {
+        Try
+        {
+            Write-Host "Authenticating with MS Graph and Azure AD…" -NoNewline
+            $intuneId = Connect-MSGraph -ErrorAction Stop
+            $aadId = Connect-AzureAD -AccountId $intuneId.UPN -ErrorAction Stop
+            Write-host "Success" -ForegroundColor Green
+        }
+        Catch
+        {
+            Write-host "Error!" -ForegroundColor Red
+            Write-host "$($_.Exception.Message)" -ForegroundColor Red
+            Return
+        }
+    }
+
+    Write-host "$($ComputerName.ToUpper())" -ForegroundColor Yellow
+    Write-Host "===============" -ForegroundColor Yellow
+
+    # Delete from AD
+    If ($PSBoundParameters.ContainsKey("AD") -or $PSBoundParameters.ContainsKey("All"))
+    {
+        Try
+        {
+            Write-host "Retrieving " -NoNewline
+            Write-host "Active Directory " -ForegroundColor Yellow -NoNewline
+            Write-host "computer account…" -NoNewline
+            $Searcher = [ADSISearcher]::new()
+            $Searcher.Filter = "(sAMAccountName=$ComputerName`$)"
+            [void]$Searcher.PropertiesToLoad.Add("distinguishedName")
+            $ComputerAccount = $Searcher.FindOne()
+            If ($ComputerAccount)
+            {
+                Write-host "Success" -ForegroundColor Green
+                Write-Host "   Deleting computer account…" -NoNewline
+                $DirectoryEntry = $ComputerAccount.GetDirectoryEntry()
+                $Result = $DirectoryEntry.DeleteTree()
+                Write-Host "Success" -ForegroundColor Green
             }
-    
-            Write-Verbose "GET $uri"
-    
-            try {
-                $response = Invoke-RestMethod -Uri $uri -Headers $header -Method Get -ContentType "application/json"
-                $response = Invoke-MSGraphRequest -Url $uri -HttpMethod Get
-                if ($id) {
-                    $response
+            Else
+            {
+                Write-host "Not found!" -ForegroundColor Red
+            }
+        }
+        Catch
+        {
+            Write-host "Error!" -ForegroundColor Red
+            $_
+        }
+    }
+
+    # Delete from Azure AD
+    If ($PSBoundParameters.ContainsKey("AAD") -or $PSBoundParameters.ContainsKey("All"))
+    {
+        Try
+        {
+            Write-host "Retrieving " -NoNewline
+            Write-host "Azure AD " -ForegroundColor Yellow -NoNewline
+            Write-host "device record/s…" -NoNewline
+            [array]$AzureADDevices = Get-AzureADDevice -SearchString $ComputerName -All:$true -ErrorAction Stop
+            If ($AzureADDevices.Count -ge 1)
+            {
+                Write-Host "Success" -ForegroundColor Green
+                Foreach ($AzureADDevice in $AzureADDevices)
+                {
+                    Write-host "   Deleting DisplayName: $($AzureADDevice.DisplayName)  |  ObjectId: $($AzureADDevice.ObjectId)  |  DeviceId: $($AzureADDevice.DeviceId) …" -NoNewline
+                    Remove-AzureADDevice -ObjectId $AzureADDevice.ObjectId -ErrorAction Stop
+                    Write-host "Success" -ForegroundColor Green
                 }
-                else {
-                    $devices = $response.value
-                    $devicesNextLink = $response."@odata.nextLink"
-        
-                    while ($devicesNextLink -ne $null){
-                        $devicesResponse = (Invoke-MSGraphRequest -Url $devicesNextLink -HttpMethod Get)
-                        $devicesNextLink = $devicesResponse."@odata.nextLink"
-                        $devices += $devicesResponse.value
-                    }
-        
-                    if ($expand) {
-                        $devices | Get-AutopilotDevice -Expand
-                    }
-                    else
+            }
+            Else
+            {
+                Write-host "Not found!" -ForegroundColor Red
+            }
+        }
+        Catch
+        {
+            Write-host "Error!" -ForegroundColor Red
+            $_
+        }
+    }
+
+    # Delete from Intune
+    If ($PSBoundParameters.ContainsKey("Intune") -or $PSBoundParameters.ContainsKey("Autopilot") -or $PSBoundParameters.ContainsKey("All"))
+    {
+        Try
+        {
+            Write-host "Retrieving " -NoNewline
+            Write-host "Intune " -ForegroundColor Yellow -NoNewline
+            Write-host "managed device record/s…" -NoNewline
+            [array]$IntuneDevices = Get-IntuneManagedDevice -Filter "deviceName eq '$ComputerName'" -ErrorAction Stop
+            If ($IntuneDevices.Count -ge 1)
+            {
+                Write-Host "Success" -ForegroundColor Green
+                If ($PSBoundParameters.ContainsKey("Intune") -or $PSBoundParameters.ContainsKey("All"))
+                {
+                    foreach ($IntuneDevice in $IntuneDevices)
                     {
-                        $devices
+                        Write-host "   Deleting DeviceName: $($IntuneDevice.deviceName)  |  Id: $($IntuneDevice.Id)  |  AzureADDeviceId: $($IntuneDevice.azureADDeviceId)  |  SerialNumber: $($IntuneDevice.serialNumber) …" -NoNewline
+                        Remove-IntuneManagedDevice -managedDeviceId $IntuneDevice.Id -Verbose -ErrorAction Stop
+                        Write-host "Success" -ForegroundColor Green
                     }
                 }
             }
-            catch {
-                Write-Error $_.Exception 
-                break
+            Else
+            {
+                Write-host "Not found!" -ForegroundColor Red
+            }
+        }
+        Catch
+        {
+            Write-host "Error!" -ForegroundColor Red
+            $_
+        }
+    }
+
+    # Delete Autopilot device
+    If ($PSBoundParameters.ContainsKey("Autopilot") -or $PSBoundParameters.ContainsKey("All"))
+    {
+        If ($IntuneDevices.Count -ge 1)
+        {
+            Try
+            {
+                Write-host "Retrieving " -NoNewline
+                Write-host "Autopilot " -ForegroundColor Yellow -NoNewline
+                Write-host "device registration…" -NoNewline
+                $AutopilotDevices = New-Object System.Collections.ArrayList
+                foreach ($IntuneDevice in $IntuneDevices)
+                {
+                    $URI = "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities?`$filter=contains(serialNumber,'$($IntuneDevice.serialNumber)')"
+                    $AutopilotDevice = Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get -ErrorAction Stop
+                    [void]$AutopilotDevices.Add($AutopilotDevice)
+                }
+                Write-Host "Success" -ForegroundColor Green
+
+                foreach ($device in $AutopilotDevices)
+                {
+                    Write-host "   Deleting SerialNumber: $($Device.value.serialNumber)  |  Model: $($Device.value.model)  |  Id: $($Device.value.id)  |  GroupTag: $($Device.value.groupTag)  |  ManagedDeviceId: $($device.value.managedDeviceId) …" -NoNewline
+                    $URI = "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities/$($device.value.Id)"
+                    $AutopilotDevice = Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Delete -ErrorAction Stop
+                    Write-Host "Success" -ForegroundColor Green
+                }
+            }
+            Catch
+            {
+                Write-host "Error!" -ForegroundColor Red
+                $_
             }
         }
     }
 
-<#
-$windowsAutopilotDeviceIdentityId='3fc09939-ccb9-448f-b28a-ed768c8c16e0'
-$windowsAutopilotDeploymentProfileAssignmentId=
-    $Resource = "deviceManagement/windowsAutopilotDeviceIdentities"
-    $uri = "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities/$windowsAutopilotDeviceIdentityId"
+    # Delete from ConfigMgr
+    If ($PSBoundParameters.ContainsKey("ConfigMgr") -or $PSBoundParameters.ContainsKey("All"))
+    {
+        Try
+        {
+            Write-host "Retrieving " -NoNewline
+            Write-host "ConfigMgr " -ForegroundColor Yellow -NoNewline
+            Write-host "device record/s…" -NoNewline
+            $SiteCode = (Get-PSDrive -PSProvider CMSITE -ErrorAction Stop).Name
+            Set-Location ("$SiteCode" + ":") -ErrorAction Stop
+            [array]$ConfigMgrDevices = Get-CMDevice -Name $ComputerName -Fast -ErrorAction Stop
+            Write-Host "Success" -ForegroundColor Green
+            foreach ($ConfigMgrDevice in $ConfigMgrDevices)
+            {
+                Write-host "   Deleting Name: $($ConfigMgrDevice.Name)  |  ResourceID: $($ConfigMgrDevice.ResourceID)  |  SMSID: $($ConfigMgrDevice.SMSID)  |  UserDomainName: $($ConfigMgrDevice.UserDomainName) …" -NoNewline
+                Remove-CMDevice -InputObject $ConfigMgrDevice -Force -ErrorAction Stop
+                Write-Host "Success" -ForegroundColor Green
+            }
+        }
+        Catch
+        {
+            Write-host "Error!" -ForegroundColor Red
+            $_
+        }
+    }
 
-    $uri = "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities/$windowsAutopilotDeviceIdentityId/deploymentProfile/assignments/$windowsAutopilotDeploymentProfileAssignmentId"
-
-    Invoke-RestMethod -Uri $uri -Headers $global:AuthToken -Method Get -ContentType "application/json"
+}
 
 
-# https://byteben.com/bb/using-powershell-with-intune-graph-to-query-devices/
-
-# TESTS
-$IntuneConnection = Connect-MSGraph -AdminConsent
-$TenantID = $IntuneConnection.TenantId
-$global:AuthToken = Get-AuthToken -User $IntuneConnection.UPN
-$DeviceID = '4eff0579-a80f-4c84-85db-d3c64a27849b'
-
-$Resource = "deviceManagement/managedDevices/$DeviceID"
-$Resource = "deviceManagement/manageddevices('$DeviceID')?`$select=userId"
-$uri = "https://graph.microsoft.com/Beta/$($resource)"
-
-$Resource = "deviceManagement/managedDevices"
-$uri = "https://graph.microsoft.com/Beta/$($resource)"
-
-Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get
 
 
-#>
+Function Get-IDMDevicePending{
+    <#
+
+    .SYNOPSIS
+        Get-AADPendingDevices PowerShell script.
+
+    .DESCRIPTION
+       Get-AzurePendingDevices is a PowerShell script helps to get all PENDING devices in Azure AD tenant.
+
+    .NOTES
+        Mohammad Zmaili
+
+    .PARAMETER Passthru
+        Displays PENDING devices on PowerShell screen.
+
+    .PARAMETER SavedCreds
+        Uses the saved credentials option to connect to MSOnline.
+        You can use any normal CLOUD only user who is having read permission to verify the devices.
+        But you have to use a global admin when using clean parameter.
+        Notes: - This parameter is very helpful when automating/running the script in task scheduler.
+            - Update the saved credentials under the section "Update Saved credentials".
+
+    .PARAMETER CleanDevices
+        Remove PENDING devices.
+
+
+    .PARAMETER ExcelReport
+        Generates Excel report and saves the result into it, if this switch not selected script will generate a CSV report.
+
+
+    .EXAMPLE
+        Get-AADPendingDevices
+        Retreives all PENDING devices in your tenant, and generates a CSV file with the output.
+
+
+    .EXAMPLE
+        Get-AzurePendingDevices -CleanDevices -OnScreenReport
+        Retreives all PENDING devices in your tenant, and generates a CSV file with the output, and displays the result on PowerShell screen.
+
+
+    .EXAMPLE
+        Get-AADPendingDevices -CleanDevices
+        Deletes PENDING devices from the tenant
+
+
+    .EXAMPLE
+        Get-AADPendingDevices -SavedCreds
+        Retreives all PENDING devices in your tenant, uses the saved credentials to access MSOnline.
+        Note: You can automate running this script using task scheduler.
+
+
+    Script Output:
+    -----------
+
+    ===================================
+    |Azure AD Pending Devices Summary:|
+    ===================================
+    Number of affected devices: 7
+    #>
+
+    [cmdletbinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [switch]$CleanDevices,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$SavedCreds,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$Passthru
+    )
+
+    #=========================
+    # Update Saved credentials
+    #=========================
+    $UserName = "user@domain.com"
+    $UserPass="PWD"
+    $UserPass=$UserPass|ConvertTo-SecureString -AsPlainText -Force
+    $UserCreds = New-Object System.Management.Automation.PsCredential($userName,$UserPass)
+
+    '==================================================='
+    Write-Host '           Get Azure AD Pending Devices                          ' -ForegroundColor Green
+    '==================================================='
+    if ($SavedCreds){
+        Connect-MsolService -Credential $UserCreds -ErrorAction SilentlyContinue
+    }
+    else{
+        Connect-MsolService -ErrorAction SilentlyContinue
+    }
+    $rep=@()
+    $Devices=@()
+    $Devices= Get-MsolDevice -all -IncludeSystemManagedDevices
+    $DevCount = $Devices.Count
+    $DevNum=1
+    ForEach ($Device in $Devices){
+
+        $a="Checking device number " + $DevNum +" out of " + $DevCount + " devices in your tenant ..."
+        Write-Progress -Activity $a -PercentComplete (($DevNum*100)/$DevCount)
+        #if ($Device.AlternativeSecurityIds){
+        if ( ($Device.DeviceTrustType -eq 'Domain Joined') -and (-not([string]($Device.AlternativeSecurityIds)).StartsWith("X509:")) ){
+
+                $rep+=$Device
+        }
+        $DevNum+=1
+    }
+
+    $Date=("{0:s}" -f (get-date)).Split("T")[0] -replace "-", ""
+    $Time=("{0:s}" -f (get-date)).Split("T")[1] -replace ":", ""
+
+    if ($rep.Count -ge 1){
+        $rep | select Enabled, ObjectId, DeviceId, DisplayName, DeviceObjectVersion, DeviceOsType, DeviceOsVersion, `
+                    DeviceTrustType, DeviceTrustLevel, ApproximateLastLogonTimestamp, DirSyncEnabled, LastDirSyncTime, `
+                    @{Name='Registeredowners';Expression={[string]::join(";", ($_.Registeredowners))}}, `
+                    @{Name='DevicePhysicalIds';Expression={[string]::join(";", ($_.DevicePhysicalIds))}}, `
+                    @{Name='AlternativeSecurityIds';Expression={[string]::join(";", ($_.AlternativeSecurityIds))}}
+
+        if ($CleanDevices){
+            $rep | Remove-MsolDevice -force
+        }
+        else{
+            $rep
+        }
+
+    }
+    else{
+
+    Write-Host "Task completed successfully." -ForegroundColor Yellow -BackgroundColor Black
+    Write-Host "There is no PENDING devices in your tenant" -ForegroundColor green -BackgroundColor Black
+
+    }
+
+
+    if ($Passthru) {
+        $rep | Out-GridView -Title "Hybrid Devices Health Check Report"
+    }
+}
+
+Function Get-IDMDeviceAssignments{
+    Param(
+        [ValidateSet('Windows','Android','MacOS','iOS')]
+        $Platform = 'Windows',
+        $DeviceId,
+        $AuthToken = $Global:AuthToken
+    )
+
+    <#SAMPLE
+    $AuthToken = $synchash.data.AuthToken
+    $DeviceId = '6e8d5d00-6fff-46df-8d61-337399a3c123'
+    $DeviceId = 'b215decf-4188-4d19-9e22-fb2e89ae0fec'
+    $DeviceId = '08d06b3b-8513-417b-80ee-9dc8a3beb377'
+    #>
+    $graphApiVersion = "beta"
+
+    #First get all Azure AD groups this device is a member of.
+    $Resource = "devices"
+    $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)/$DeviceID/memberOf"
+    $DeviceGroups = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
+    $MemberOfGroups = $DeviceGroups | Select id, displayName,@{N='GroupType';E={If('DynamicMembership' -in $_.groupTypes){return 'Dynamic'}Else{return 'Static'} }}
+
+    #loop through each Intune Component, then get assignments for each
+    Switch($Platform){
+        'Windows' {
+                $PlatformType = @('microsoftStore',
+                                'win32LobApp',
+                                'windows',
+                                'officeSuiteApp',
+                                'sharedPC',
+                                'editionUpgrade',
+                                'webApp'
+                )
+
+                $Resources = @{
+                    'Compliance Policy' = 'deviceManagement/deviceCompliancePolicies'
+                    'Compliance Scripts' = 'deviceManagement/deviceComplianceScripts'
+                    'Configuration Profile' = 'deviceManagement/deviceConfigurations'
+                    'Enrollment Configuration' = 'deviceManagement/deviceEnrollmentConfigurations'
+                    'Proactive Remediation' = 'deviceManagement/deviceHealthScripts'
+                    'Powershell Scripts' = 'deviceManagement/deviceManagementScripts'
+                    'Scope Tag' = 'deviceManagement/roleScopeTags'
+                    'PolicySet' = 'deviceAppManagement/policysets'
+                    'Quality Updates' = 'deviceManagement/windowsQualityUpdateProfiles'
+                    'Feature Updates' = 'deviceManagement/windowsFeatureUpdateProfiles'
+                    'Apps' = 'deviceAppManagement/mobileApps'
+                    'WIP Policies' = 'deviceAppManagement/windowsInformationProtectionPolicies'
+                    'MDM WIP Policies' = 'deviceAppManagement/mdmWindowsInformationProtectionPolicies'
+                }
+        }
+
+        'Android' {$PlatformType = @('android',
+                                    'webApp',
+                                    'aosp'
+                                    )
+        }
+
+        'MacOS'   {$PlatformType = @('IOS',
+                                    'macOS',
+                                    'webApp'
+                                    )
+        }
+
+        'iOS'     {$PlatformType = @('ios',
+                                    'webApp'
+                                    )
+        }
+    }
+
+    $ResourceAssignments = @()
+    #TEST $Resources =  @{'Apps' = 'deviceAppManagement/mobileApps'}
+    #TEST $uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps"
+    #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/deviceCompliancePolicies"
+    #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/deviceConfigurations"
+    #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/windowsQualityUpdateProfiles"
+    Foreach($ResourceItem in $Resources.GetEnumerator())
+    {
+        $uri = "https://graph.microsoft.com/$graphApiVersion/$($ResourceItem.Value)"
+        $ResourceResult = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
+        #$ResourceResult | Select displayname, applicableDeviceType,'@odata.type' -Unique
+        #Filter on Platform if it exists
+        If($ResourceResult.'@odata.type'){
+            $ResourceResult = ($ResourceResult | Where '@odata.type' -match ($PlatformType -join '|'))
+        }
+
+        #TEST $Item = $ResourceResult[-1]
+        #TEST $Item = $ResourceResult | Where id -eq 'ca8b2b92-87fe-4a83-b0d5-1f970bae7ea4'
+        #TEST $uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/ca8b2b92-87fe-4a83-b0d5-1f970bae7ea4/assignments"
+        #TEST $uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/ae3e6923-b240-4914-ab09-76222bc926f7/assignments"
+        #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/deviceManagementScripts/d9954a7f-e264-4de7-af9c-28ce77c3fed6/assignments"
+        Foreach($Item in $ResourceResult)
+        {
+            $uri = "https://graph.microsoft.com/$graphApiVersion/$($ResourceItem.Value)/$($Item.id)/assignments"
+            Try{
+                $Assignments = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
+
+                Foreach($Assignment in $Assignments)
+                {
+                    $AssignmentsGroup = '' | Select Name,Type,Mode,Target,Platform,Group,GroupType
+                    $AssignmentsGroup.Name = $Item.displayName
+                    $AssignmentsGroup.Type = $ResourceItem.Key
+                    $AssignmentsGroup.Mode = $Assignment.intent
+                    $AssignmentsGroup.Target = 'Device'
+                    $AssignmentsGroup.Platform = $Platform
+
+                    switch($Assignment.target.'@odata.type'){
+                        '#microsoft.graph.allDevicesAssignmentTarget' {
+                            $AddToGroup = $true
+                            $AssignmentsGroup.Mode = 'Assigned'
+                            $AssignmentsGroup.Group = 'All Devices'
+                            $AssignmentsGroup.GroupType = 'Built-In'
+                        }
+
+                        '#microsoft.graph.exclusionGroupAssignmentTarget' {
+                            $AssignmentsGroup.Mode = 'Excluded'
+                            $TargetAssignments = $Assignment.target | Where '@odata.type' -eq '#microsoft.graph.exclusionGroupAssignmentTarget'
+                            #$Group = $TargetAssignments.GroupId[-1]
+                            Foreach($Group in $TargetAssignments.GroupId)
+                            {
+                                If($Group -in $MemberOfGroups.id){
+                                    $AddToGroup = $true
+                                    $AssignmentsGroup.Group = ($MemberOfGroups | Where id -eq $Group).displayName
+                                    $AssignmentsGroup.GroupType = ($MemberOfGroups | Where id -eq $Group).GroupType
+                                }Else{
+                                    $AddToGroup = $false
+                                }
+                            }
+                        }
+
+                        '#microsoft.graph.groupAssignmentTarget' {
+                            $AssignmentsGroup.Mode = 'Assigned'
+                            $TargetAssignments = $Assignment.target | Where '@odata.type' -eq '#microsoft.graph.groupAssignmentTarget'
+                            Foreach($Group in $TargetAssignments.GroupId)
+                            {
+                                If($Group -in $MemberOfGroups.id){
+                                    $AddToGroup = $true
+                                    $AssignmentsGroup.Group = ($MemberOfGroups | Where id -eq $Group).displayName
+                                    $AssignmentsGroup.GroupType = ($MemberOfGroups | Where id -eq $Group).GroupType
+                                }Else{
+                                    $AddToGroup = $false
+                                }
+                            }
+                        }
+                        default {$AddToGroup = $false}
+                    }
+
+                    If($AddToGroup){
+                        $ResourceAssignments += $AssignmentsGroup
+                    }
+                }
+
+                <#add alldevice to assignment list
+                If($Assignments.target.'@odata.type' -eq '#microsoft.graph.allDevicesAssignmentTarget')
+                {
+                    $Assignments | Where {$_.target.'@odata.type' -eq '#microsoft.graph.allDevicesAssignmentTarget'} | %{
+                        $AssignmentsGroup.Mode = $_.intent
+                        $AssignmentsGroup.Group = 'All Devices'
+                        $AssignmentsGroup.GroupType = 'Built-In'
+                        $ResourceAssignments += $AssignmentsGroup
+                    }
+                }
+                Else{
+                    #TEST $Group = $Assignments.groupid[0]
+                    Foreach($Group in $Assignments.target)
+                    {
+                        switch($Group.'@odata.type'){
+                            "#microsoft.graph.exclusionGroupAssignmentTarget" {$AssignmentsGroup.Mode = 'Excluded'}
+                            "#microsoft.graph.groupAssignmentTarget" {If([string]::IsNullOrEmpty($Assignments.intent)){$AssignmentsGroup.Mode = 'Assigned'}}
+                            default {If([string]::IsNullOrEmpty($Assignments.intent)){$AssignmentsGroup.Mode = 'Assigned'}}
+                        }
+
+                        If($Group.groupid -in $MemberOfGroups.id){
+                            $AssignmentsGroup.Group = ($MemberOfGroups | Where id -eq $Group.groupid).displayName
+                            $AssignmentsGroup.GroupType = ($MemberOfGroups | Where id -eq $Group.groupid).GroupType
+                            $ResourceAssignments += $AssignmentsGroup
+                        }
+                    }
+                }
+                #>
+
+            }
+            Catch{
+                $ex = $_.Exception
+                $errorResponse = $ex.Response.GetResponseStream()
+                $reader = New-Object System.IO.StreamReader($errorResponse)
+                $reader.BaseStream.Position = 0
+                $reader.DiscardBufferedData()
+                $responseBody = $reader.ReadToEnd();
+                Write-Host "Response content:`n$responseBody" -f Red
+                Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
+
+            }
+        }
+    }
+
+    <#
+
+    #SAMPLE DATA
+    $Assignments = @()
+    $Assignment = "" | Select DeviceName,AssignmentName,Type,Mode,Target,Group,GroupType
+    $Assignment.DeviceName = $Device
+    $Assignment.AssignmentName = 'Autopilot hybrid Join profile'
+    $Assignment.Type = 'Autopilot Deployment Profile'
+    $Assignment.Mode = 'Assigned'
+    $Assignment.Target = 'Device'
+    $Assignment.Group ='SG-Autopilot-Device'
+    $Assignment.GroupType = 'Dynamic'
+    $Assignments += $Assignment
+
+    return $Assignments
+    #>
+    return $ResourceAssignments
+}
+
+
+Function Get-IDMUserAssignments{
+    Param(
+        [ValidateSet('Windows','Android','MacOS','iOS')]
+        $Platform = 'Windows',
+        $UserId,
+        $AuthToken = $Global:AuthToken
+    )
+    #TEST $UserId = 'c9d00ac2-b07d-4477-961b-442bbc424586"'
+    $graphApiVersion = "beta"
+
+    #First get all Azure AD groups this user is a member of.
+    $Resource = "users"
+    $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)/$UserId/memberOf"
+    $UserGroups = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
+    $MemberOfGroups = $UserGroups | Select id, displayName,@{N='GroupType';E={If('DynamicMembership' -in $_.groupTypes){return 'Dynamic'}Else{return 'Static'} }}
+
+    #loop through each Intune Component, then get assignments for each
+    Switch($Platform){
+        'Windows' {
+                $PlatformType = @('microsoftStore',
+                                'win32LobApp',
+                                'windows',
+                                'officeSuiteApp',
+                                'sharedPC',
+                                'editionUpgrade',
+                                'webApp'
+                )
+
+                $Resources = @{
+                    'Compliance Policy' = 'deviceManagement/deviceCompliancePolicies'
+                    'Compliance Scripts' = 'deviceManagement/deviceComplianceScripts'
+                    'Configuration Profile' = 'deviceManagement/deviceConfigurations'
+                    'Enrollment Configuration' = 'deviceManagement/deviceEnrollmentConfigurations'
+                    'Proactive Remediation' = 'deviceManagement/deviceHealthScripts'
+                    'Powershell Scripts' = 'deviceManagement/deviceManagementScripts'
+                    'Scope Tag' = 'deviceManagement/roleScopeTags'
+                    'PolicySet' = 'deviceAppManagement/policysets'
+                    'Quality Updates' = 'deviceManagement/windowsQualityUpdateProfiles'
+                    'Feature Updates' = 'deviceManagement/windowsFeatureUpdateProfiles'
+                    'Apps' = 'deviceAppManagement/mobileApps'
+                    'WIP Policies' = 'deviceAppManagement/windowsInformationProtectionPolicies'
+                    'MDM WIP Policies' = 'deviceAppManagement/mdmWindowsInformationProtectionPolicies'
+                }
+        }
+
+        'Android' {$PlatformType = @('android',
+                                    'webApp',
+                                    'aosp'
+                                    )
+        }
+
+        'MacOS'   {$PlatformType = @('IOS',
+                                    'macOS',
+                                    'webApp'
+                                    )
+        }
+
+        'iOS'     {$PlatformType = @('ios',
+                                    'webApp'
+                                    )
+        }
+    }
+
+
+    $ResourceAssignments = @()
+    #TEST $ResourceItem = $Resources.GetEnumerator()[0]
+    #TEST $uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps"
+    #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/deviceManagementScripts"
+    Foreach($ResourceItem in $Resources.GetEnumerator()){
+        $uri = "https://graph.microsoft.com/$graphApiVersion/$($ResourceItem.Value)"
+        $ResourceResult = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
+        #Filter on Platform if it exists
+        If($ResourceResult.'@odata.type'){
+            $ResourceResult = ($ResourceResult | Where '@odata.type' -match ($PlatformType -join '|'))
+        }
+
+        #TEST $Item = $ResourceResult[-1]
+        Foreach($Item in $ResourceResult){
+            #$uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/7b7f28d8-a347-441c-8b93-6ea0f896cab0/assignments"
+            #$uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/7f6fa0d2-c4ca-4ee6-8275-1ff2b00912ff/assignments"
+
+            $uri = "https://graph.microsoft.com/$graphApiVersion/$($ResourceItem.Value)/$($Item.id)/assignments"
+            Try{
+                $Assignments = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
+                Foreach($Assignment in $Assignments)
+                {
+                    $AssignmentsGroup = '' | Select Name,Type,Mode,Target,Platform,Group,GroupType
+                    $AssignmentsGroup.Name = $Item.displayName
+                    $AssignmentsGroup.Type = $ResourceItem.Key
+                    $AssignmentsGroup.Mode = $Assignments.intent
+                    $AssignmentsGroup.Target = 'User'
+                    $AssignmentsGroup.Platform = $Platform
+
+                    switch($Assignments.target.'@odata.type'){
+                        '#microsoft.graph.allLicensedUsersAssignmentTarget' {
+                            $AddToGroup = $true
+                            $AssignmentsGroup.Mode = 'Assigned'
+                            $AssignmentsGroup.Group = 'All Users'
+                            $AssignmentsGroup.GroupType = 'Built-In'
+                            #$ResourceAssignments += $AssignmentsGroup
+                        }
+
+                        '#microsoft.graph.exclusionGroupAssignmentTarget' {
+                            $AssignmentsGroup.Mode = 'Excluded'
+                            $TargetAssignments = $Assignment.target | Where '@odata.type' -eq '#microsoft.graph.exclusionGroupAssignmentTarget'
+                            Foreach($Group in $TargetAssignments.GroupId)
+                            {
+                                If($Group -in $MemberOfGroups.id){
+                                    $AddToGroup = $true
+                                    $AssignmentsGroup.Group = ($MemberOfGroups | Where id -eq $Group).displayName
+                                    $AssignmentsGroup.GroupType = ($MemberOfGroups | Where id -eq $Group).GroupType
+                                    #$ResourceAssignments += $AssignmentsGroup
+                                }Else{
+                                    $AddToGroup = $false
+                                }
+                            }
+                        }
+
+                        '#microsoft.graph.groupAssignmentTarget' {
+                            $AssignmentsGroup.Mode = 'Assigned'
+                            $TargetAssignments = $Assignment.target | Where '@odata.type' -eq '#microsoft.graph.groupAssignmentTarget'
+                            Foreach($Group in $TargetAssignments.GroupId)
+                            {
+                                If($Group -in $MemberOfGroups.id){
+                                    $AddToGroup = $true
+                                    $AssignmentsGroup.Group = ($MemberOfGroups | Where id -eq $Group).displayName
+                                    $AssignmentsGroup.GroupType = ($MemberOfGroups | Where id -eq $Group).GroupType
+                                    #$ResourceAssignments += $AssignmentsGroup
+                                }Else{
+                                    $AddToGroup = $false
+                                }
+                            }
+                        }
+                        default {$AddToGroup = $false}
+                    }
+
+                    If($AddToGroup){
+                        $ResourceAssignments += $AssignmentsGroup
+                    }
+                }
+
+                <#
+                $Assignments | Where {$_.target.'@odata.type' -eq '#microsoft.graph.allLicensedUsersAssignmentTarget'} | %{
+                    $AssignmentsGroup.Mode = $_.intent
+                    $AssignmentsGroup.Group = 'All Users'
+                    $AssignmentsGroup.GroupType = 'Built-In'
+                    $ResourceAssignments += $AssignmentsGroup
+                }
+
+                #TEST $Group = $Assignments.groupid[0]
+                Foreach($Group in $Assignments.target)
+                {
+                    switch($Group.'@odata.type'){
+                        "#microsoft.graph.exclusionGroupAssignmentTarget" {$AssignmentsGroup.Mode = 'Excluded'}
+                        "#microsoft.graph.groupAssignmentTarget" {If([string]::IsNullOrEmpty($Assignments.intent)){$AssignmentsGroup.Mode = 'Assigned'}}
+                        default {If([string]::IsNullOrEmpty($Assignments.intent)){$AssignmentsGroup.Mode = 'Assigned'}}
+                    }
+
+                    If($Group.groupid -in $MemberOfGroups.id){
+                        $AssignmentsGroup.Group = ($MemberOfGroups | Where id -eq $Group.groupid).displayName
+                        $AssignmentsGroup.GroupType = ($MemberOfGroups | Where id -eq $Group.groupid).GroupType
+                        $ResourceAssignments += $AssignmentsGroup
+                    }
+                }
+                #>
+
+            }
+            Catch{
+                $ex = $_.Exception
+                $errorResponse = $ex.Response.GetResponseStream()
+                $reader = New-Object System.IO.StreamReader($errorResponse)
+                $reader.BaseStream.Position = 0
+                $reader.DiscardBufferedData()
+                $responseBody = $reader.ReadToEnd();
+                Write-Host "Response content:`n$responseBody" -f Red
+                Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
+            }
+        }
+    }
+
+
+
+    <#
+    #SAMPLE DATA
+    $Assignments = @()
+    $Assignment = "" | Select UPN,AssignmentName,Type,Mode,Target,Group,GroupType
+    $Assignment.UPN = $User
+    $Assignment.AssignmentName = 'Company Portal'
+    $Assignment.Type = 'Application'
+    $Assignment.Mode = 'Installed'
+    $Assignment.Target = 'User'
+    $Assignment.Group ='All Users'
+    $Assignment.GroupType = 'Built-in'
+    $Assignments += $Assignment
+    #>
+    return $ResourceAssignments
+}

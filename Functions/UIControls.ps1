@@ -18,6 +18,23 @@ Function Get-UIVariable{
 #endregion
 
 
+Function Get-UIProperty{
+    param(
+        [Parameter(Mandatory = $true, Position=0)]
+        [hashtable]$HashName,
+        [Parameter(Mandatory = $true, Position=1)]
+        [string]$Name,
+        [switch]$Wildcard
+
+    )
+    If($Wildcard){
+        Return ($HashName.GetEnumerator() | Where {$_.Name -like "*$name*"}).Value
+    }
+    Else{
+        Return ($HashName.GetEnumerator() | Where Name -eq $Name).Value
+    }
+}
+#endregion
 
 Function Search-UIDeviceList{
     Param(
@@ -81,10 +98,10 @@ function Switch-UITabItem {
 }
 #endregion
 
-Function Get-UIFieldElement {
+Function Get-UIElement {
     [CmdletBinding()]
     param(
-        [parameter(Mandatory=$true, Position=0,ParameterSetName="name",ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
+        [parameter(Mandatory=$true, Position=1,ParameterSetName="name",ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [object[]]$Name
     )
     Begin{
@@ -112,17 +129,17 @@ Function Get-UIFieldElement {
 }
 
 #region FUNCTION: Set UI fields to either visible and state
-Function Set-UIFieldElement {
+Function Set-UIElement {
     [CmdletBinding()]
     param(
-        [parameter(Mandatory=$true, Position=0,ParameterSetName="object",ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
+        [parameter(Mandatory=$true, Position=1,ParameterSetName="object",ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [object[]]$FieldObject,
-        [parameter(Mandatory=$true, Position=0,ParameterSetName="name",ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
+        [parameter(Mandatory=$true, Position=1,ParameterSetName="name",ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [string[]]$FieldName,
         [boolean]$Enable,
         [boolean]$Visible,
         [string]$Content,
-        [string]$text,
+        [string]$Text,
         $Source
     )
     Begin{
@@ -133,7 +150,7 @@ Function Set-UIFieldElement {
         If ($PSCmdlet.ParameterSetName -eq "name")
         {
             $FieldObject = @()
-            $FieldObject = Get-UIFieldElement -Name $FieldName
+            $FieldObject = Get-UIElement -Name $FieldName
         }
 
         #set visable values
@@ -198,6 +215,9 @@ function Write-UIOutput {
     	[string]$Type,
         [switch]$Passthru
 	)
+    ## Get the name of this function
+    [string]${CmdletName} = $MyInvocation.MyCommand
+
     Switch ($Type) {
         "Info"    { $fg = "Gray";$Severity=1}
         "Start"   { $fg = "Cyan";$Severity=1}
@@ -210,11 +230,67 @@ function Write-UIOutput {
     #[System.Windows.Forms.Application]::DoEvents()
     $UIObject.ScrollToEnd()
 
-    Write-LogEntry $Message -Severity $Severity -PassThru:$Passthru
+    Write-LogEntry $Message -Severity $Severity -Source ${CmdletName}
+
+    If($Passthru){
+
+    }
 }
 
+Function Update-IDMProgress{
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true,ParameterSetName='Progress')]
+        [Parameter(Mandatory=$true,ParameterSetName='Scroll')]
+        [hashtable]$Runspace,
 
-Function Get-UIFieldElement {
+        [Parameter(Mandatory=$true,ParameterSetName='Progress')]
+        [int]$PercentComplete,
+
+        [Parameter(Mandatory=$true,ParameterSetName='Scroll')]
+        [switch]$Indeterminate,
+
+        [Parameter(Mandatory=$False)]
+        [String]$StatusMsg,
+
+        [string]$Color = "Green"
+    )
+
+    if(!$Indeterminate){
+        if(($PercentComplete -ge 0) -and ($PercentComplete -lt 100))
+        {
+	        $Runspace.ProgressBar.Dispatcher.Invoke("Normal",[action]{
+			        $Runspace.ProgressBar.IsIndeterminate = $False
+			        $Runspace.ProgressBar.Value = $PercentComplete
+			        $Runspace.ProgressBar.Foreground = $Color
+			        $Runspace.txtStatus.Text = $StatusMsg
+                    $syncHash.txtStatus.Foreground = $Color
+			        $Runspace.txtPercentage.Text = ('' + $PercentComplete + '%')
+            })
+        }
+        else{
+            $Runspace.ProgressBar.Dispatcher.Invoke("Normal",[action]{
+			        $Runspace.ProgressBar.IsIndeterminate = $False
+			        $Runspace.ProgressBar.Value = $PercentComplete
+			        $Runspace.ProgressBar.Foreground = $Color
+			        $Runspace.txtStatus.Text = $StatusMsg
+                    $syncHash.txtStatus.Foreground = $Color
+			        $Runspace.txtPercentage.Text = ('' + $PercentComplete + '%')
+            })
+        }
+    }
+    else{
+        $Runspace.ProgressBar.Dispatcher.Invoke("Normal",[action]{
+			$Runspace.ProgressBar.IsIndeterminate = $True
+			$Runspace.ProgressBar.Foreground = $Color
+			$Runspace.txtStatus.Text = $StatusMsg
+            $syncHash.txtStatus.Foreground = $Color
+            $Runspace.txtPercentage.Text = ' '
+      })
+    }
+}
+
+Function Get-UIElement {
     [CmdletBinding()]
     param(
         [parameter(Mandatory=$true, Position=0,ParameterSetName="name",ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
@@ -252,7 +328,7 @@ Function Add-PopupContent{
         [Parameter(Mandatory = $true, Position=1)]
         [hashtable]$ContextHash
     )
-    
+
     #TEST $Context = $ContextHash.GetEnumerator() | Sort Name
     Foreach($Context in $ContextHash.GetEnumerator() | Sort Name)
     {
@@ -292,33 +368,49 @@ Function Clear-PopupContent{
     $FlowDocumentObject.Blocks.Clear();
 }
 
-Function Add-UIDeviceList{
+Function Add-UIList{
     Param(
         [Parameter(Mandatory = $true, Position=0)]
         $ItemsList,
+        [Parameter(Mandatory = $true, Position=1,ParameterSetName="listbox")]
         [System.Windows.Controls.ListBox]$ListObject,
+        [Parameter(Mandatory = $true, Position=1,ParameterSetName="dropdown")]
+        [System.Windows.Controls.ComboBox]$DropdownObject,
         [Parameter(Mandatory = $false, Position=2)]
         [string]$Identifier,
         [switch]$Passthru
     )
+    ## Get the name of this function
+    [string]${CmdletName} = $MyInvocation.MyCommand
 
-    If($null -eq $Identifier){$Identifier = ''}
+    If ($PSCmdlet.ParameterSetName -eq "listbox") {
+        $Object = $ListObject
+        $Object.Items.Clear();
+    }
+    If ($PSCmdlet.ParameterSetName -eq "dropdown") {
+        $Object = $DropdownObject
+    }
 
-    $ListObject.Items.Clear();
+    If (!($PSBoundParameters.ContainsKey("Identifier")) ) {
+        $Identifier = $false
+    }
 
+    #TEST  $item = $ItemsList[0]
+    #$ItemsList=$AbbrTypeList
+    #$Object=$UIResponseData.cmbRuleAbbrType
     foreach ($item in $ItemsList)
     {
         #Check to see if properties exists
         If($item.PSobject.Properties.Name.Contains($Identifier)){
-            $ListObject.Items.Add($item.$Identifier) | Out-Null
+            $Object.Items.Add($item.$Identifier) | Out-Null
         }
         Else{
-            $ListObject.Items.Add($item) | Out-Null
+            $Object.Items.Add($item) | Out-Null
         }
     }
 
     If($Passthru){
-        return $ItemsList.$Identifier
+        return $Object.Items
     }
 }
 #endregion
@@ -391,99 +483,383 @@ public static extern bool ShowWindow(IntPtr hWnd, Int32 nCmdShow);
 #endregion
 
 Function Open-AppSecretPrompt {
-    [System.Reflection.Assembly]::LoadWithPartialName('WindowsFormsIntegration') | out-null
-    [System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Application') | out-null
-    [System.Reflection.Assembly]::LoadWithPartialName('PresentationFramework') | out-null
-    [System.Reflection.Assembly]::LoadWithPartialName('PresentationCore')      | out-null
 
-    $SecretForm = @"
-    <Window 
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:local="clr-namespace:AppSecret"
-    Title="AppSecret"
-    WindowStyle="None"
-    WindowStartupLocation="CenterScreen"
-    Height="200" Width="400"
-    ResizeMode="NoResize"
-    ShowInTaskbar="False">
-<Window.Resources>
-        <Style TargetType="{x:Type Button}">
-            <!-- This style is used for buttons, to remove the WPF default 'animated' mouse over effect -->
-            <Setter Property="OverridesDefaultStyle" Value="True"/>
-            <Setter Property="Foreground" Value="#FFEAEAEA"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button" >
+    Param(
+        $Secret
+    )
+    #build runspace
+    $syncHash = [hashtable]::Synchronized(@{})
+    $ASPRunSpace =[runspacefactory]::CreateRunspace()
+    $syncHash.Runspace = $ASPRunSpace
+    $syncHash.AppSecret = $Secret
+    $ASPRunSpace.ApartmentState = "STA"
+    $ASPRunSpace.ThreadOptions = "ReuseThread"
+    $ASPRunSpace.Open() | Out-Null
+    $ASPRunSpace.SessionStateProxy.SetVariable("syncHash",$syncHash)
+    $PowerShellCommand = [PowerShell]::Create().AddScript({
 
-                        <Border Name="border" 
-                                    BorderThickness="1"
-                                    Padding="4,2" 
-                                    BorderBrush="#FFEAEAEA" 
-                                    CornerRadius="2" 
-                                    Background="{TemplateBinding Background}">
-                            <ContentPresenter HorizontalAlignment="Center" 
-                                                  VerticalAlignment="Center" 
-                                                  TextBlock.FontSize="10px"
-                                                  TextBlock.TextAlignment="Center"
-                                                  />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="#FF919191" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </Window.Resources>
-    <Grid Background="#313130">
-        <Label x:Name="lblPassword" Content="Type in the App Secret:" HorizontalAlignment="Left" Margin="32,47,0,0" VerticalAlignment="Top" Foreground="White" RenderTransformOrigin="0.557,-0.246" Width="147"/>
-        <PasswordBox x:Name="pwdBoxPassword" Width="332" Height="24" Margin="37,78,31,98"/>
-        <Label x:Name="lblMsg" HorizontalAlignment="Left" Margin="37,102,0,0" VerticalAlignment="Top" Width="332" Foreground="Red"/>
+    [string]$xaml = @"
+        <Window
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:AppSecret"
+        Title="AppSecret"
+        WindowStyle="None"
+        WindowStartupLocation="CenterScreen"
+        Height="200" Width="400"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False">
+    <Window.Resources>
+            <Style TargetType="{x:Type Button}">
+                <!-- This style is used for buttons, to remove the WPF default 'animated' mouse over effect -->
+                <Setter Property="OverridesDefaultStyle" Value="True"/>
+                <Setter Property="Foreground" Value="#FFEAEAEA"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button" >
 
-        <Button x:Name="btnSubmit" Content="Submit" HorizontalAlignment="Left" Margin="286,140,0,0" VerticalAlignment="Top" Width="95" Height="50" Background="Black" Foreground="White"/>
-        <Button x:Name="btnCancel" Content="Cancel" HorizontalAlignment="Left" Margin="32,140,0,0" VerticalAlignment="Top" Width="95" Height="50" Background="Black" Foreground="White"/>
-        
+                            <Border Name="border"
+                                        BorderThickness="1"
+                                        Padding="4,2"
+                                        BorderBrush="#FFEAEAEA"
+                                        CornerRadius="2"
+                                        Background="{TemplateBinding Background}">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center"
+                                                    TextBlock.FontSize="10px"
+                                                    TextBlock.TextAlignment="Center"
+                                                    />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="border" Property="BorderBrush" Value="#FF919191" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </Window.Resources>
+        <Grid Background="#313130">
+            <Label x:Name="lblPassword" Content="Type in the App Secret:" HorizontalAlignment="Left" Margin="32,47,0,0" VerticalAlignment="Top" Foreground="White" RenderTransformOrigin="0.557,-0.246" Width="147"/>
+            <PasswordBox x:Name="pwdBoxPassword" Width="332" Height="24" Margin="37,78,31,98"/>
+            <Label x:Name="lblMsg" HorizontalAlignment="Left" Margin="37,102,0,0" VerticalAlignment="Top" Width="332" Foreground="Red"/>
+
+            <Button x:Name="btnSubmit" Content="Submit" HorizontalAlignment="Left" Margin="286,140,0,0" VerticalAlignment="Top" Width="95" Height="50" Background="Black" Foreground="White"/>
+            <Button x:Name="btnCancel" Content="Cancel" HorizontalAlignment="Left" Margin="32,140,0,0" VerticalAlignment="Top" Width="95" Height="50" Background="Black" Foreground="White"/>
+
+        </Grid>
+    </Window>
+"@
+
+        #Load assembies to display UI
+        [void][System.Reflection.Assembly]::LoadWithPartialName('PresentationFramework')
+
+        [xml]$xaml = $xaml -replace 'mc:Ignorable="d"','' -replace "x:N",'N' -replace '^<Win.*', '<Window'
+        $reader=(New-Object System.Xml.XmlNodeReader $xaml)
+        $syncHash.Window=[Windows.Markup.XamlReader]::Load( $reader )
+        #===========================================================================
+        # Store Form Objects In PowerShell
+        #===========================================================================
+        $xaml.SelectNodes("//*[@Name]") | %{ $syncHash."$($_.Name)" = $syncHash.Window.FindName($_.Name)}
+
+        # INNER  FUNCTIONS
+        #Closes UI objects and exits (within runspace)
+        Function Close-AppSecretPrompt
+        {
+            if ($syncHash.hadCritError) { Write-Host -Message "Background thread had a critical error" -ForegroundColor red }
+            #if runspace has not errored Dispose the UI
+            if (!($syncHash.isClosing)) { $syncHash.Window.Close() | Out-Null }
+        }
+
+        If($syncHash.AppSecret){
+            $syncHash.pwdBoxPassword.Password = $syncHash.AppSecret
+        }
+
+        $syncHash.btnSubmit.Add_Click({
+            If([string]::IsNullOrEmpty($syncHash.pwdBoxPassword.Password) ){
+                $syncHash.lblMsg.content = "Invalid Secret, please try again or cancel"
+            }Else{
+                $syncHash.Secret = $syncHash.pwdBoxPassword.Password
+                Close-AppSecretPrompt
+            }
+        })
+
+        $syncHash.btnCancel.Add_Click({
+            Close-AppSecretPrompt
+        })
+
+        #Allow UI to be dragged around screen
+        $syncHash.Window.Add_MouseLeftButtonDown( {
+            $syncHash.Window.DragMove()
+        })
+
+        #Add smooth closing for Window
+        $syncHash.Window.Add_Loaded({ $syncHash.isLoaded = $True })
+        $syncHash.Window.Add_Closing({ $syncHash.isClosing = $True; Close-AppSecretPrompt })
+        $syncHash.Window.Add_Closed({ $syncHash.isClosed = $True })
+
+        #make sure this display on top of every window
+        $syncHash.Window.Topmost = $true
+
+        $syncHash.window.ShowDialog()
+        $syncHash.Error = $Error
+    }) # end scriptblock
+
+    #collect data from runspace
+    $Data = $syncHash
+
+    #invoke scriptblock in runspace
+    $PowerShellCommand.Runspace = $ASPRunSpace
+    $AsyncHandle = $PowerShellCommand.BeginInvoke()
+
+    #wait until runspace is completed before ending
+    do {
+        Start-sleep -m 100 }
+    while (!$AsyncHandle.IsCompleted)
+    #end invoked process
+    $null = $PowerShellCommand.EndInvoke($AsyncHandle)
+
+    #cleanup registered object
+    Register-ObjectEvent -InputObject $syncHash.Runspace `
+            -EventName 'AvailabilityChanged' `
+            -Action {
+
+                    if($Sender.RunspaceAvailability -eq "Available")
+                    {
+                        $Sender.Closeasync()
+                        $Sender.Dispose()
+                        # Speed up resource release by calling the garbage collector explicitly.
+                        # Note that this will pause *all* threads briefly.
+                        [GC]::Collect()
+                    }
+
+                } | Out-Null
+
+    return $Data
+
+}#end runspace
+
+
+Function Show-IDMAssignmentsWindow {
+
+    Param(
+        $DeviceData,
+        $DeviceAssignments,
+        $UserData,
+        $UserAssignments,
+        [switch]$External
+    )
+    #build runspace
+    $syncHash = [hashtable]::Synchronized(@{})
+    $ASPRunSpace =[runspacefactory]::CreateRunspace()
+    $syncHash.Runspace = $ASPRunSpace
+    $syncHash.IsChangeable = $External
+    $syncHash.DeviceData = $DeviceData
+    $syncHash.DeviceAssignments = $DeviceAssignments
+    $syncHash.UserData = $UserData
+    $syncHash.UserAssignments = $UserAssignments
+    $syncHash.AssignmentData = @()
+    $ASPRunSpace.ApartmentState = "STA"
+    $ASPRunSpace.ThreadOptions = "ReuseThread"
+    $ASPRunSpace.Open() | Out-Null
+    $ASPRunSpace.SessionStateProxy.SetVariable("syncHash",$syncHash)
+    $PowerShellCommand = [PowerShell]::Create().AddScript({
+
+    [string]$xaml = @"
+    <Window
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="DeviceAssignments" Height="600" Width="1000"
+        WindowStyle="None"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        BorderBrush="Black"
+        BorderThickness="2">
+    <Grid>
+        <Label Content="Device" HorizontalAlignment="Left" VerticalAlignment="Top" Width="48" HorizontalContentAlignment="Right" Margin="15,14,0,0"/>
+        <TextBox x:Name="txtDeviceName" HorizontalAlignment="Left" Height="22" VerticalAlignment="Top" Width="227" Margin="63,16,0,0"/>
+        <Label Content="User" HorizontalAlignment="Left" VerticalAlignment="Top" Width="48" HorizontalContentAlignment="Right" Margin="15,42,0,0"/>
+        <TextBox x:Name="txtAssignedUPN" HorizontalAlignment="Left" Height="22" VerticalAlignment="Top" Width="227" Margin="63,45,0,0"/>
+
+        <Label Content="Search" HorizontalAlignment="Center" VerticalAlignment="Top" Width="48" HorizontalContentAlignment="Right" Margin="0,12,0,0"/>
+        <TextBox x:Name="txtAssignmentSearch" HorizontalAlignment="Left" Height="22" VerticalAlignment="Top" Width="422" Margin="522,16,0,0"/>
+        <Button x:Name="btnAssignments" Content="Get Assignments" HorizontalAlignment="Left" VerticalAlignment="Top" VerticalContentAlignment="Center"  Width="97" Height="51" Margin="295,17,0,0" />
+        <Label Content="Column Filter" HorizontalAlignment="Left" VerticalAlignment="Top" Width="93" HorizontalContentAlignment="Right" Margin="429,44,0,0"/>
+        <ComboBox x:Name="cmbFilterOnColumn" Width="140" Margin="522,46,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" />
+        <ComboBox x:Name="cmbColumnValues" Width="277" Margin="667,46,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" />
+        <Button x:Name="btnReset" Content="X" VerticalContentAlignment="Center" HorizontalContentAlignment="Center" HorizontalAlignment="Left" VerticalAlignment="Top"  Width="28" Height="22" Margin="949,46,0,0" />
+
+        <ListView x:Name="lstDeviceAssignments" HorizontalAlignment="Center" Height="437" Margin="0,73,0,0"  VerticalAlignment="Top" Width="958">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Assignment Name" DisplayMemberBinding="{Binding Name}" />
+                    <GridViewColumn Header="Assignment Type" DisplayMemberBinding="{Binding Type}" />
+                    <GridViewColumn Header="Mode" DisplayMemberBinding="{Binding Mode}" />
+                    <GridViewColumn Header="Target" DisplayMemberBinding="{Binding Target}" />
+                    <GridViewColumn Header="Azure AD Group" DisplayMemberBinding="{Binding Group}" />
+                    <GridViewColumn Header="GroupType" DisplayMemberBinding="{Binding GroupType}" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+        <Label Content="Total Assignments:" HorizontalAlignment="Left" VerticalAlignment="Top" Width="142" HorizontalContentAlignment="Right" Margin="19,514,0,0"/>
+        <TextBox x:Name="txtTotalAssignments" Text="0" HorizontalAlignment="Left" Height="22" VerticalAlignment="Top" Width="66" IsEnabled="False" Margin="166,519,0,0" BorderThickness="0"/>
+        <Label Content="Device Assignments:" HorizontalAlignment="Left" VerticalAlignment="Top" Width="142" HorizontalContentAlignment="Right" Margin="19,536,0,0"/>
+        <TextBox x:Name="txtDeviceAssignments" Text="0" HorizontalAlignment="Left" Height="22" VerticalAlignment="Top" Width="66" IsEnabled="False" Margin="166,543,0,0" BorderThickness="0"/>
+        <Label Content="User Assignments:" HorizontalAlignment="Left" VerticalAlignment="Top" Width="142" HorizontalContentAlignment="Right" Margin="19,560,0,0"/>
+        <TextBox x:Name="txtUserAssignments" Text="0" HorizontalAlignment="Left" Height="22" VerticalAlignment="Top" Width="66" IsEnabled="False" Margin="166,567,0,0" BorderThickness="0"/>
+
+        <Button x:Name="btnExport" Content="Export" HorizontalAlignment="Left" VerticalAlignment="Top"  Width="124" Height="33"  FontSize="16" Margin="724,521,0,0" />
+        <Button x:Name="btnExit" Content="Exit" HorizontalAlignment="Left" VerticalAlignment="Top"  Width="124" Height="33" FontSize="16" Margin="853,521,0,0"/>
+        <ProgressBar x:Name="ProgressBar" Width="644" Height="14" Margin="188,566,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Background="White" Foreground="LightGreen" />
+        <TextBox x:Name="txtStatus" HorizontalAlignment="Left" Height="28" VerticalAlignment="Top" Width="433" IsEnabled="False" Margin="188,527,0,0" BorderThickness="0" TextWrapping="Wrap"/>
+        <TextBox x:Name="txtPercentage" Text="100%" HorizontalAlignment="Left" Height="23" VerticalAlignment="Top" Width="37" IsEnabled="False" Margin="837,563,0,0" BorderThickness="0"/>
     </Grid>
 </Window>
 "@
 
-    #convert XAML to XML just to grab info using xml dot sourcing (Not used to process form)
-    [xml]$XAMLPopup = $SecretForm -replace 'mc:Ignorable="d"','' -replace "x:N",'N' -replace '^<Win.*', '<Window' -replace 'Click=".*','/>'
+        #Load assembies to display UI
+        [void][System.Reflection.Assembly]::LoadWithPartialName('PresentationFramework')
 
-    $PopupReader = New-Object System.Xml.XmlNodeReader ($XAMLPopup)
-    try{
-       $Popup=[Windows.Markup.XamlReader]::Load($PopupReader)
-    }
-    catch{
-        $ErrorMessage = $_.Exception.Message
-        Write-Host "Unable to load Windows.Markup.XamlReader for popup. Some possible causes for this problem include:
-        - .NET Framework is missing
-        - PowerShell must be launched with PowerShell -sta
-        - invalid XAML code was encountered
-        - The error message was [$ErrorMessage]" -ForegroundColor White -BackgroundColor Red
-        break
-    }
-    
-    #take the xaml properties & make them variables
-    $XAMLPopup.SelectNodes("//*[@Name]") | %{Set-Variable -Name "pop_$($_.Name)" -Value $Popup.FindName($_.Name)}
-    
-    $pop_btnCancel.Add_Click({
-        $Popup.Close()
-    })
+        [xml]$xaml = $xaml -replace 'mc:Ignorable="d"','' -replace "x:N",'N' -replace '^<Win.*', '<Window'
+        $reader=(New-Object System.Xml.XmlNodeReader $xaml)
+        $syncHash.Window=[Windows.Markup.XamlReader]::Load( $reader )
+        #===========================================================================
+        # Store Form Objects In PowerShell
+        #===========================================================================
+        $xaml.SelectNodes("//*[@Name]") | %{ $syncHash."$($_.Name)" = $syncHash.Window.FindName($_.Name)}
 
-    $pop_btnSubmit.Add_Click({
-        If([string]::IsNullOrEmpty($pop_pwdBoxPassword.Password) ){
-            $pop_lblMsg.content = "Invalid Secret, please try again or cancel"
-        }Else{
-            $Global:AppSecret = $pop_pwdBoxPassword.Password
-            $Popup.Close()
+        # INNER  FUNCTIONS
+        #Closes UI objects and exits (within runspace)
+        Function Close-IDMAssignmentsWindow
+        {
+            if ($syncHash.hadCritError) { Write-Host -Message "Background thread had a critical error" -ForegroundColor red }
+            #if runspace has not errored Dispose the UI
+            if (!($syncHash.isClosing)) { $syncHash.Window.Close() | Out-Null }
         }
-    })
 
-    Show-UIMenu -FormObject $Popup
-}
+        If($syncHash.DeviceAssignments.count -gt 0){$syncHash.AssignmentData += $syncHash.DeviceAssignments}
+        If($syncHash.UserAssignments.count -gt 0){$syncHash.AssignmentData += $syncHash.UserAssignments}
+
+        #Combine data into one
+        $syncHash.lstDeviceAssignments.ItemsSource = $syncHash.AssignmentData
+
+        @("Name","Type","Mode","Target","Group","GroupType","Platform") | %{$syncHash.cmbFilterOnColumn.Items.Add($_) | Out-Null}
+        $syncHash.cmbFilterOnColumn.SelectedItem = "Name"
+
+        #populate text fields
+        $syncHash.txtDeviceName.Text = $syncHash.DeviceData.DeviceName
+        $syncHash.txtAssignedUPN.Text = $syncHash.UserData.userPrincipalName
+        $syncHash.txtTotalAssignments.Text = $syncHash.AssignmentData.Count
+        $syncHash.txtDeviceAssignments.Text = $syncHash.DeviceAssignments.Count
+        $syncHash.txtUserAssignments.Text = $syncHash.UserAssignments.Count
+
+        If($syncHash.IsChangeable){
+            $syncHash.txtDeviceName.IsReadOnly = $false
+            $syncHash.txtAssignedUPN.IsReadOnly = $false
+            $syncHash.ProgressBar.Visibility = 'Visible'
+            $syncHash.txtPercentage.Visibility = 'Visible'
+            $syncHash.txtStatus.Visibility = 'Visible'
+            $syncHash.btnAssignments.Visibility = 'Visible'
+        }
+        Else{
+            $syncHash.txtDeviceName.IsReadOnly = $true
+            $syncHash.txtAssignedUPN.IsReadOnly = $true
+            $syncHash.ProgressBar.Visibility = 'Hidden'
+            $syncHash.txtPercentage.Visibility = 'Hidden'
+            $syncHash.txtStatus.Visibility = 'Hidden'
+            $syncHash.btnAssignments.Visibility = 'Hidden'
+        }
+
+        #ACTIVATE LIVE SEARCH
+        $syncHash.txtAssignmentSearch.AddHandler(
+            [System.Windows.Controls.Primitives.TextBoxBase]::TextChangedEvent,
+            [System.Windows.RoutedEventHandler]{
+                If($syncHash.cmbFilterOnColumn.SelectedItem){
+                    $syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterOnColumn.SelectedItem) -like "*$($syncHash.txtAssignmentSearch.text)*"})
+                }
+                Else{
+                    $syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.Name -like "*$($syncHash.txtAssignmentSearch.text)*"})
+                }
+            }
+        )
+
+        $syncHash.cmbFilterOnColumn.Add_SelectionChanged({
+            #first sort data by selected item
+            $syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Sort $syncHash.cmbFilterOnColumn.SelectedItem)
+            #build values for next item
+            $syncHash.cmbColumnValues.Items.Clear()
+            $syncHash.AssignmentData.($syncHash.cmbFilterOnColumn.SelectedItem) | Select -Unique | %{$syncHash.cmbColumnValues.Items.Add($_) | Out-Null}
+        })
+
+        $syncHash.cmbColumnValues.Add_SelectionChanged({
+            $syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterOnColumn.SelectedItem) -eq $syncHash.cmbColumnValues.SelectedItem})
+        })
+
+        $syncHash.btnReset.Add_Click({
+            $syncHash.txtAssignmentSearch.text = $null
+            $syncHash.cmbFilterOnColumn.SelectedItem = $null
+            $syncHash.cmbColumnValues.SelectedItem = $null
+            $syncHash.lstDeviceAssignments.ItemsSource = $syncHash.AssignmentData
+        })
+
+        $syncHash.btnExport.Add_Click({
+            # disable this button to prevent multiple export.
+            $this.IsEnabled = $false
+            $syncHash.Data | Export-Csv -NoTypeInformation "$env:USERPROFILE\Desktop\$($syncHash.txtDeviceName.Text)_$($syncHash.txtAssignedUPN.Text.replace('@','_'))_$(Get-Date -Format yyyyMMdd).csv" -Force
+        })
+
+        $syncHash.btnExit.Add_Click({
+            Close-IDMAssignmentsWindow
+        })
+
+        #Allow UI to be dragged around screen
+        $syncHash.Window.Add_MouseLeftButtonDown( {
+            $syncHash.Window.DragMove()
+        })
+
+        #Add smooth closing for Window
+        $syncHash.Window.Add_Loaded({ $syncHash.isLoaded = $True })
+        $syncHash.Window.Add_Closing({ $syncHash.isClosing = $True; Close-IDMAssignmentsWindow })
+        $syncHash.Window.Add_Closed({ $syncHash.isClosed = $True })
+
+        #make sure this display on top of every window
+        $syncHash.Window.Topmost = $true
+
+        $syncHash.window.ShowDialog()
+        $syncHash.Error = $Error
+    }) # end scriptblock
+
+    #collect data from runspace
+    $Data = $syncHash
+
+    #invoke scriptblock in runspace
+    $PowerShellCommand.Runspace = $ASPRunSpace
+    $AsyncHandle = $PowerShellCommand.BeginInvoke()
+
+    #cleanup registered object
+    Register-ObjectEvent -InputObject $syncHash.Runspace `
+            -EventName 'AvailabilityChanged' `
+            -Action {
+
+                    if($Sender.RunspaceAvailability -eq "Available")
+                    {
+                        $Sender.Closeasync()
+                        $Sender.Dispose()
+                        # Speed up resource release by calling the garbage collector explicitly.
+                        # Note that this will pause *all* threads briefly.
+                        [GC]::Collect()
+                    }
+
+                } | Out-Null
+
+    return $Data
+
+}#end runspace
+
+#$IDMAssignment = Show-IDMAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -DeviceAssignments $syncHash.Data.DeviceAssignments -UserData $syncHash.Data.AssignedUser -UserAssignments $syncHash.Data.UserAssignments
