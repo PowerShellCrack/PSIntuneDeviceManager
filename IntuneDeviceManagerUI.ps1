@@ -31,8 +31,8 @@ param(
     [string]$CMSiteServer,
     [switch]$AdvancedMode,
     [switch]$AppConnect,
-    [string]$ApplicationId ="dd99ec13-a3c5-4703-b95f-794a2b559fb0",
-    [string]$TenantId = "2ec9dcf0-b109-434a-8bcd-238a3bf0c6b2"
+    [string]$ApplicationId,
+    [string]$TenantId
 )
 #*=============================================
 ##* Runtime Function - REQUIRED

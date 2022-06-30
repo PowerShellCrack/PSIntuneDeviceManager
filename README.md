@@ -10,9 +10,11 @@ Manage Intune devices
 To launch the script; its best to call it through PowerShell, like so:
 
 ```powershell
+#connect normally
 .\IntuneDeviceManagerUI.ps1
 
-.\IntuneDeviceManagerUI.ps1 -AppConnect
+#connect using a Application id
+.\IntuneDeviceManagerUI.ps1 -AppConnect -ApplicationId '94727407-0ae1-4505-b4eb-a5b0ff155b05' -TenantId 'f4387048-a542-4b0b-b1a6-7e62fe5f422e'
 ```
 
 The script will check for prerequisites:
@@ -55,7 +57,7 @@ NOTE: this may take a bit, depending on device count. The UI may look like its n
 
 ## For Rename Operations
 
-1. Click Reammer Tab
+1. Click Renamer Tab
 
 2.	Click on the Sync button to corelate the Azure account with the AD account.
 a.	If the account is found, the accounts distinguished name will appear below.
@@ -84,16 +86,31 @@ NOTE: this may take a while to load, depending on objects in Intune and Azure. T
 
 4. This list can further be searched of filtered. It can also be exported to CSV
 
+## Output
 
+The script runs in a runspace so data cannot be access directly. However, after script is completed and closed, data can be extracted.
+By default the script will output to a $global:syncHash variable. In there it data is retrievable
+
+```powershell
+#Data input from parameters
+$global:syncHash.properties
+
+#output of all data selected
+$global:syncHash.data
+
+#UI errors
+$global:syncHash.error
+```
 
 ## Features that don’t exist or do not work just yet:
 - Progressbar during assignment loading or device retrieval
+- multithreading while pulling data
 - Alternate AD credentials
 - Option to not increment name
 - *All Generation Methods except "User OU Name"
 - ** Azure government support not working
 - *** Some logging is missing
-
+- Configuration Manager link
 
 
 
