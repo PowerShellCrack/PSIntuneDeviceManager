@@ -27,6 +27,7 @@ The script will check for prerequisites:
 
 
 It will prompt to install them (from internet)…so if it’s not ran as privilege administrator; it may fail. You will see them as red in the bottom status bar in the UI
+
 ![Modules](/.images/IDMWindow_installmodule.jpg)
 
 > Once all prereqs are installed and everything shows green in the status bar (besides MSGraph Connected), you can continue. If not restart app after install
@@ -42,17 +43,19 @@ b.	You will be required to accept the "allow permissions to read and write to In
 c.	You may have to brin the UI back up from the task bar. I tried to get to restore window, but sometimes it does not.
 
 > If you created a application principal account, and use -AppConnect parameter, the prompt is slightly different
+
 ![AppConnect](/.images/IDMWindow_AppConnect.jpg)
 
-
 2.	Once its connected, it will immediately start pulling Windows AAD devices into the list.
-a.	This is preconfigured to filter anything other than Windows.
-NOTE: this may take a bit, depending on device count. The UI may look like its not responding (its not a multithreaded UI...yet).
+a.	This is pre-configured to filter anything other than Windows.
+> NOTE: this may take a bit, depending on device count. The UI may look like its not responding (it is not a multithreaded UI...yet).
+
 ![Connect](/.images/IDMWindow_Connected.jpg)
 
 3.	You can search the device in the search window (it will filter as you type).
 
 4.	Once you select a device, the script will grab the detailed device and user information from Azure AD.
+
 ![Selected](/.images/IDMWindow_SelectedDevice.jpg)
 
 ## For Rename Operations
@@ -81,10 +84,11 @@ b.	You can also check Intune and see the same action.
 2. Click Details Tab
 
 3. Click Get Assignments
-NOTE: this may take a while to load, depending on objects in Intune and Azure. The UI may look like its not responding (its not a multithreaded UI...yet). Once complete though a screen will come up:
+
+> NOTE: this may take a while to load, depending on objects in Intune and Azure. The UI may look like its not responding (its not a multithreaded UI...yet). Once complete though a screen will come up:
 ![Selected](/.images/IDMWindow_Assignments.jpg)
 
-4. This list can further be searched of filtered. It can also be exported to CSV
+4. This list can further be searched or filtered. It can also be exported to CSV
 
 ## Output
 
