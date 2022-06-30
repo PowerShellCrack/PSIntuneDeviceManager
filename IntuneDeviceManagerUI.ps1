@@ -13,7 +13,7 @@ MODULES REQUIRED:
     AzureAD
     WindowsAutoPilotIntune
 #>
-[cmdletbinding()]
+[cmdletbinding(DefaultParameterSetName='UPN')]
 param(
     [hashtable]$Rules = @{RuleRegex1 = '^.{0,3}';RuleRegex2 ='.{0,3}[\s+]'},
     [ValidateSet('Windows','Android','MacOS','iOS')]
@@ -27,11 +27,29 @@ param(
     [string]$Prefix,
     [ValidateSet(0,1,2,3,4,5)]
     [int]$AppendDigits = 3,
+
+    [Parameter(Mandatory=$false,ParameterSetName='UPN')]
+    [Parameter(Mandatory=$false,ParameterSetName='CM')]
+    [Parameter(Mandatory=$false,ParameterSetName='CMwithApp')]
     [string]$CMSiteCode,
+
+    [Parameter(Mandatory=$false,ParameterSetName='UPN')]
+    [Parameter(Mandatory=$true,ParameterSetName='CM')]
+    [Parameter(Mandatory=$true,ParameterSetName='CMwithApp')]
     [string]$CMSiteServer,
-    [switch]$AdvancedMode,
+
+    [Parameter(Mandatory=$false,ParameterSetName='App')]
+    [Parameter(Mandatory=$true,ParameterSetName='CMwithApp')]
     [switch]$AppConnect,
+
+    [Parameter(Mandatory=$false,ParameterSetName='UPN')]
+    [Parameter(Mandatory=$true,ParameterSetName='App')]
+    [Parameter(Mandatory=$true,ParameterSetName='CMwithApp')]
     [string]$ApplicationId,
+
+    [Parameter(Mandatory=$false,ParameterSetName='UPN')]
+    [Parameter(Mandatory=$true,ParameterSetName='App')]
+    [Parameter(Mandatory=$true,ParameterSetName='CMwithApp')]
     [string]$TenantId
 )
 #*=============================================
@@ -401,13 +419,17 @@ Function Show-IDMWindow
             $syncHash.btnADUserSync.IsEnabled = $false
         }
         # check if RSAT PowerShell Module is installed
+        $syncHash.txtCMSiteCode.text = $syncHash.Properties.CMSiteCode
+        $syncHash.txtCMSiteServer.text = $syncHash.Properties.CMSiteServer
+
         If(-Not[string]::IsNullOrEmpty($syncHash.txtCMSiteCode.text) -and -Not[string]::IsNullOrEmpty($syncHash.txtCMSiteServer.text))
         {
-            If(Test-CMModule -CMSite $syncHash.txtCMSiteCode.text -CMSite $syncHash.txtCMSiteServer.text){
+            If(Test-CMModule -CMSite $syncHash.txtCMSiteCode.text -CMSiteServer $syncHash.txtCMSiteServer.text){
                 $syncHash.txtRSA.text = 'Yes';$syncHash.txtRSAT.Foreground = 'Green'
                 Write-UIOutput -UIObject $syncHash.Logging -Message ("Configuration Manager PowerShell module is installed: {0}" -f (Test-CMModule -CMSite $syncHash.txtCMSiteCode.text -CMSite $syncHash.txtCMSiteServer.text -Passthru)) -Type Info -Passthru
                 $syncHash.btnCMSiteSync.IsEnabled = $true
-            }Else{
+            }
+            Else{
                 Write-UIOutput -UIObject $syncHash.Logging -Message ("Configuration Manager PowerShell module must be installed to be able to query CM device names") -Type Error -Passthru
                 $syncHash.txtRSAT.text = 'No'
                 $syncHash.btnCMSiteSync.IsEnabled = $False
@@ -415,7 +437,9 @@ Function Show-IDMWindow
         }
         Else{
             Write-UIOutput -UIObject $syncHash.Logging -Message ("Configuration Manager settings are not configured, configure them to use the CM feature") -Type Warning -Passthru
+            $syncHash.btnCMSiteSync.IsEnabled = $False
         }
+
         # Get PowerShell Version
         [hashtable]$envPSVersionTable = $PSVersionTable
         [version]$envPSVersion = $envPSVersionTable.PSVersion
@@ -1308,4 +1332,4 @@ $global:syncHash.Properties
 $global:syncHash.Data
 #show any UI error from isolated runspace
 $global:syncHash.Error
-$Global:AuthToken = $syncHash.Data.AuthToken
+#$Global:AuthToken = $syncHash.Data.AuthToken

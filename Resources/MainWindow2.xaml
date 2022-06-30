@@ -69,7 +69,7 @@
         <TabControl x:Name="menuNavigation" HorizontalAlignment="Center" VerticalAlignment="Top" Style="{DynamicResource ResourceKey=styleTabControl}" Width="1024" Height="755">
             <TabItem Header="Devices" Style="{DynamicResource ResourceKey=styleTabItemLeft}">
                 <Grid Background="#FFF">
-                    <Button x:Name="btnMSGraphConnect" Content="Connect to Intune (MSGraph)" HorizontalAlignment="Left" Height="77" Margin="10,10,0,0" VerticalAlignment="Top" Width="236"/>
+                    <Button x:Name="btnMSGraphConnect" Content="Connect to Intune (MSGraph)" HorizontalAlignment="Left" Height="77" Margin="10,10,0,0" VerticalAlignment="Top" Width="236"  Style="{DynamicResource ResourceKey=modernButton}"/>
                     <Label Content="Connected as:" HorizontalAlignment="Left" Height="23" Margin="252,5,0,0" VerticalAlignment="Top" Width="206" FontSize="10" Foreground="LightGray"/>
                     <TextBox x:Name="txtGraphConnectAs" HorizontalAlignment="Left" Height="17" Margin="252,28,0,0" VerticalAlignment="Top" Width="206" IsEnabled="False" FontSize="10"/>
                     <Label Content="Auth Token Expires:" HorizontalAlignment="Left" Height="23" Margin="252,45,0,0" VerticalAlignment="Top" Width="206" FontSize="10" Foreground="LightGray"/>
@@ -155,18 +155,18 @@
                     </Grid.ColumnDefinitions>
 
 
-                    <GroupBox Header="AutoPilot Options" Width="496" Height="162" Margin="507,10,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"  RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2" />
-                    <Label Content="AutoPilot Deployment Profile" Width="167" Margin="522,34,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Grid.ColumnSpan="2"/>
-                    <ComboBox x:Name="cmbAPProfile" Width="303" Margin="156,37,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Grid.Column="1" />
-                    <Label Content="AutoPilot Group Tag" Width="167" Margin="522,65,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Grid.ColumnSpan="2"/>
-                    <TextBox x:Name="txtAPProfileGroupTag" Width="201" Height="22" Margin="156,67,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" TextWrapping="NoWrap" Grid.Column="1" />
-                    <Button x:Name="btnAPProfileChange" Content="Change" HorizontalAlignment="Left" Margin="371,132,0,0" VerticalAlignment="Top" Width="88" Height="28" Grid.Column="1"/>
-                    <Button x:Name="btnAPProfileExport" Content="Export Profile" HorizontalAlignment="Left" Margin="522,132,0,0" VerticalAlignment="Top" Width="109" Height="28" Grid.ColumnSpan="2"/>
+                    <GroupBox Header="AutoPilot Options" Width="496" Height="162" Margin="507,102,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"  RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2" />
+                    <Label Content="AutoPilot Deployment Profile" Width="167" Margin="522,126,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Grid.ColumnSpan="2"/>
+                    <ComboBox x:Name="cmbAPProfile" Width="303" Margin="156,130,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Grid.Column="1" />
+                    <Label Content="AutoPilot Group Tag" Width="167" Margin="522,158,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Grid.ColumnSpan="2"/>
+                    <TextBox x:Name="txtAPProfileGroupTag" Width="201" Height="22" Margin="156,160,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" TextWrapping="NoWrap" Grid.Column="1" />
+                    <Button x:Name="btnAPProfileChange" Content="Change" HorizontalAlignment="Left" Margin="371,224,0,0" VerticalAlignment="Top" Width="88" Height="28" Grid.Column="1"/>
+                    <Button x:Name="btnAPProfileExport" Content="Export Profile" HorizontalAlignment="Left" Margin="522,224,0,0" VerticalAlignment="Top" Width="109" Height="28" Grid.ColumnSpan="2"/>
 
-                    <GroupBox Header="Device Category" Width="496" Height="107" Margin="507,177,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"  RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2" />
-                    <Label Content="Device Categories" Width="167" Margin="517,203,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Grid.ColumnSpan="2"/>
-                    <ComboBox x:Name="cmbDeviceCategoryList" Width="303" Margin="156,205,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Grid.Column="1" />
-                    <Button x:Name="btnDeviceCategoryChange" Content="Change" HorizontalAlignment="Left" Margin="371,239,0,0" VerticalAlignment="Top" Width="88" Height="28" Grid.Column="1"/>
+                    <GroupBox Header="Device Category" Width="496" Height="106" Margin="507,270,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"  RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2" />
+                    <Label Content="Device Categories" Width="167" Margin="517,296,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Grid.ColumnSpan="2"/>
+                    <ComboBox x:Name="cmbDeviceCategoryList" Width="303" Margin="156,298,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Grid.Column="1" />
+                    <Button x:Name="btnDeviceCategoryChange" Content="Change" HorizontalAlignment="Left" Margin="371,332,0,0" VerticalAlignment="Top" Width="88" Height="28" Grid.Column="1"/>
 
                     <GroupBox Width="486" Height="632" Margin="11,10,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Header="Hardware Info" RenderTransformOrigin="0.5,0.5" />
                     <CheckBox x:Name="chkHardwareDeviceRemote" Width="217" Margin="30,45,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Content="Attempt Device Remote Connection" />
@@ -180,11 +180,7 @@
                         </ListView.View>
                     </ListView>
 
-
-
-                    <GroupBox Width="494" Height="80" Margin="510,381,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Header="Intune Assignments" RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2" />
-                    <Button x:Name="btnViewIntuneAssignments" Width="144" Height="34" Margin="150,409,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Content="View Intune Assignments" Grid.Column="1" />
-
+                    <Button x:Name="btnViewIntuneAssignments" Width="494" Height="71" Margin="508,18,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Content="View Intune Assignments" Style="{DynamicResource ResourceKey=modernButton}" Grid.ColumnSpan="2"/>
 
                     <GroupBox Width="498" Height="174" Margin="508,468,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Foreground="Gray" Header="ConfigMgr" Grid.ColumnSpan="2" />
                     <Label Width="60" Margin="525,491,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Site Code" Grid.ColumnSpan="2" />

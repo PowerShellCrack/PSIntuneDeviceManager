@@ -9,6 +9,24 @@ Manage Intune devices
 ## Here is how you use it:
 To launch the script; its best to call it through PowerShell, like so:
 
+### Parameters
+
+| Name | Type | Default value | Help | Notes|
+|--|--|--|--|--|
+|Rules|hashtable| @{RuleRegex1 = '^.{0,3}';RuleRegex2 ='.{0,3}[\s+]'}|consist of 4 regex rules: RuleRegex1,RuleRegex2,RuleRegex3,RuleRegex4|Sets default regex rules on launch; can be changed within UI
+|DevicePlatform|string|'Windows'|Options are: Windows,Android,MacOS,iOS|Sets default platform on launch
+|FilterJoinType|string|Hybrid|Options are: Hybrid,Azure,Registered,Domain
+|SearchFilter|string|*||Sets default filter search on launch; can be changed within UI
+|AbbrType|string|Chassis|Options are: No Abbr,Chassis,Manufacturer,Model|Sets default chassis check on launch; can be changed within UI
+|AbbrKey|string|'Laptop=A, Notebook=A, Tablet=A, Desktop=W, Tower=W, Virtual Machine=W'||Sets default abbreviation on launch; can be changed within UI
+|Prefix|string|||Sets default prefix on launch; can be changed within UI
+|AppendDigits|int|3|0,1,2,3,4,5|Sets default digits to append to name on launch; can be changed within UI
+|CMSiteCode|string||Not working yet
+|CMSiteServer|string||Not working yet
+|AppConnect|switch||Set to use App ID instead of UPN for MSGraph
+|ApplicationId|string||Set App ID to connect with
+|TenantId|string||Tenant ID needed for App ID
+
 ```powershell
 #connect normally
 .\IntuneDeviceManagerUI.ps1
@@ -16,6 +34,7 @@ To launch the script; its best to call it through PowerShell, like so:
 #connect using a Application id
 .\IntuneDeviceManagerUI.ps1 -AppConnect -ApplicationId '94727407-0ae1-4505-b4eb-a5b0ff155b05' -TenantId 'f4387048-a542-4b0b-b1a6-7e62fe5f422e'
 ```
+
 
 The script will check for prerequisites:
 
@@ -28,7 +47,7 @@ The script will check for prerequisites:
 
 It will prompt to install them (from internet)…so if it’s not ran as privilege administrator; it may fail. You will see them as red in the bottom status bar in the UI
 
-![Modules](/.images/IDMWindow_installmodule.jpg)
+![Install Module](/.images/IDMWindow_Installmodule.jpg)
 
 > Once all prereqs are installed and everything shows green in the status bar (besides MSGraph Connected), you can continue. If not restart app after install
 
