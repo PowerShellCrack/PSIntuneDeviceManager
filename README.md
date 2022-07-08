@@ -1,13 +1,12 @@
 # PSIntuneDeviceManagerUI
-Manage Intune devices
+a UI to manage Intune devices, that may be more difficult to do within portal.
 
 **WORK-IN-PROGRESS** This is still in development.
 
-
-**NEW** Intune Device Manager UI was built to allow more management or Intune devices besides just renaming
+**NEW** Revampled _Hybrid Device Renamer UI_ to _Intune Device Manager UI_; built to allow more management or Intune devices besides just renaming devices.
 
 ## Here is how you use it:
-To launch the script; its best to call it through PowerShell, like so:
+
 
 ### Parameters
 
@@ -20,15 +19,18 @@ To launch the script; its best to call it through PowerShell, like so:
 |AbbrType|string|Chassis|Options are: No Abbr,Chassis,Manufacturer,Model|Sets default chassis check on launch; can be changed within UI
 |AbbrKey|string|'Laptop=A, Notebook=A, Tablet=A, Desktop=W, Tower=W, Virtual Machine=W'||Sets default abbreviation on launch; can be changed within UI
 |Prefix|string|||Sets default prefix on launch; can be changed within UI
-|AppendDigits|int|3|0,1,2,3,4,5|Sets default digits to append to name on launch; can be changed within UI
+|AppendDigits|int|3|Options are: 0,1,2,3,4, or 5|Sets default digits to append to name on launch; can be changed within UI
 |CMSiteCode|string||Not working yet
 |CMSiteServer|string||Not working yet
 |AppConnect|switch||Set to use App ID instead of UPN for MSGraph
 |ApplicationId|string||Set App ID to connect with
 |TenantId|string||Tenant ID needed for App ID
 
+To launch the script; its best to call it through PowerShell, like so:
+
 ```powershell
 #connect normally
+cd '<path to script folder>'
 .\IntuneDeviceManagerUI.ps1
 
 #connect using a Application id
@@ -45,7 +47,7 @@ The script will check for prerequisites:
     - If its ran on a Domain joined device
 
 
-It will prompt to install them (from internet)…so if it’s not ran as privilege administrator; it may fail. You will see them as red in the bottom status bar in the UI
+if it finds a missing one, it will prompt to install them…so if it’s not ran as privilege administrator; it will install under user context. You will see them as "no" in red at the bottom status bar of the UI
 
 ![Install Module](/.images/IDMWindow_Installmodule.jpg)
 
@@ -56,17 +58,17 @@ Once the UI is launched, here are the steps to perform:
 
 1. Click the button:  Connect to Intune (MSGraph)
 
-
-a.	This will minimize the UI and request your Azure login
-b.	You will be required to accept the "allow permissions to read and write to Intune". Scroll down and click Accept
-c.	You may have to brin the UI back up from the task bar. I tried to get to restore window, but sometimes it does not.
+    a.	This will minimize the UI and request your Azure login
+    b.	You will be required to accept the "allow permissions to read and write to Intune". Scroll down and click Accept
+    c.	You may have to bring the UI back up from the task bar. its designed to be restore window, but sometimes it does not work
 
 > If you created a application principal account, and use -AppConnect parameter, the prompt is slightly different
 
 ![AppConnect](/.images/IDMWindow_AppConnect.jpg)
 
 2.	Once its connected, it will immediately start pulling Windows AAD devices into the list.
-a.	This is pre-configured to filter anything other than Windows.
+    a.	This is pre-configured to filter anything other than Windows.
+
 > NOTE: this may take a bit, depending on device count. The UI may look like its not responding (it is not a multithreaded UI...yet).
 
 ![Connect](/.images/IDMWindow_Connected.jpg)
@@ -82,20 +84,22 @@ a.	This is pre-configured to filter anything other than Windows.
 1. Click Renamer Tab
 
 2.	Click on the Sync button to corelate the Azure account with the AD account.
-a.	If the account is found, the accounts distinguished name will appear below.
-b.	And it will auto generate the name as well (based on rules set)
+    a.	If the account is found, the accounts distinguished name will appear below.
+    b.	And it will auto generate the name as well (based on rules set)
 
 3.	The auto generated name, will use the Generation rules specified in the configure tab
-a.	This is pre-configured to use your naming convention but can be changed. *
-b.	If you change the rules, click the Sync button to refresh the name
+    a.	This is pre-configured to use your naming convention but can be changed. *
+    b.	If you change the rules, click the Sync button to refresh the name
 
 4.	Select the move to OU checkbox to move the AD object to another OU.
-a.	This is pre-configured to the root computers OU. This can be changed in configure tab.
+    a.	This is pre-configured to the root computers OU. This can be changed in configure tab.
 
 5.	Click Rename Device.
-WARNING: this will attempt to rename the Intune object and not in AD.
-a.	If you refresh the list and select the same device again; a warning message will come up near bottom of screen stating there is a pending rename action.
-b.	You can also check Intune and see the same action.
+
+> WARNING: this will attempt to rename the Intune object and not in AD.
+
+    a.	If you refresh the list and select the same device again; a warning message will come up near bottom of screen stating there is a pending rename action.
+    b.	You can also check Intune and see the same action.
 
 ## For Retrieving Assignments
 1. Select a device
@@ -108,6 +112,12 @@ b.	You can also check Intune and see the same action.
 ![Selected](/.images/IDMWindow_Assignments.jpg)
 
 4. This list can further be searched or filtered. It can also be exported to CSV
+
+## Logging
+
+The UI does output performed clicks in the logging tab. Not everything is logged ***
+
+![Selected](/.images/IDMWindow_logging.jpg)
 
 ## Output
 
@@ -128,14 +138,12 @@ $global:syncHash.error
 ## Features that don’t exist or do not work just yet:
 - Progressbar during assignment loading or device retrieval
 - multithreading while pulling data
-- Alternate AD credentials
-- Option to not increment name
+- Alternate AD credentials (eg PIV)
+- Option to not increment name (overwrite domain object)
 - *All Generation Methods except "User OU Name"
 - ** Azure government support not working
 - *** Some logging is missing
-- Configuration Manager link
-
-
+- Configuration Manager connection sync for assignments
 
 
 # DISCLAIMER

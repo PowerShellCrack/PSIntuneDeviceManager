@@ -1,9 +1,8 @@
-<Window x:Class="AutopilotDeviceRenamer.MainWindow"
+<Window
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:AutopilotDeviceRenamer"
         mc:Ignorable="d"
         WindowStartupLocation="CenterScreen"
         Title="MainWindow" Height="786" Width="1024"
@@ -14,12 +13,24 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <!-- Make sure that all file names are Case Sensitive! -->
-                <ResourceDictionary Source="/Resources/CenterPillTabs.xaml"/>
-                <ResourceDictionary Source="/Resources/Modern.xaml"/>
+                <ResourceDictionary Source="/Resources/TabControl_BluePillCenter.xaml"/>
+                <ResourceDictionary Source="/Resources/Button_DarkBlueSquareStyle.xaml"/>
+                <ResourceDictionary Source="/Resources/Button_LightBlueRoundStyle.xaml"/>
+                <ResourceDictionary Source="/Resources/Button_LightBlueSquareStyle.xaml"/>
+                <ResourceDictionary Source="/Resources/Button_NeonBlueRoundStyle.xaml"/>
+                <ResourceDictionary Source="/Resources/Checkbox_GreenSliderModernStyle.xaml"/>
+                <ResourceDictionary Source="/Resources/CheckBox_DiscretGreenStyle.xaml"/>
+                <ResourceDictionary Source="/Resources/ComboBox_SimpleGrayStyle.xaml"/>
+                <ResourceDictionary Source="/Resources/ListBox_SimpleBlueStyle.xaml"/>
+                <ResourceDictionary Source="/Resources/GroupBox_DarkSquareModernStyle.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <Canvas x:Key="icons_eye" Width="24" Height="24">
                 <Path Stretch="Fill" Fill="White" Data="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z" />
+            </Canvas>
+
+            <Canvas x:Key="icons_refresh" Width="24" Height="24">
+                <Path Stretch="Fill" Fill="White" Data="M12 4C15.64 4 18.67 6.59 19.35 10.04C21.95 10.22 24 12.36 24 15C24 17.76 21.76 20 19 20H6C2.69 20 0 17.31 0 14C0 10.91 2.34 8.36 5.35 8.04C6.6 5.64 9.11 4 12 4M17 13V9L16 10C15.09 8.79 13.64 8 12 8C9.24 8 7 10.24 7 13C7 15.76 9.24 18 12 18C14.05 18 15.81 16.77 16.58 15H14.24C13.69 15.61 12.89 16 12 16C10.34 16 9 14.66 9 13C9 11.34 10.34 10 12 10C13.09 10 14.04 10.58 14.56 11.44L13 13H17Z" />
             </Canvas>
 
         </ResourceDictionary>
@@ -66,20 +77,28 @@
             </Border>
         </Popup>
 
-        <TabControl x:Name="menuNavigation" HorizontalAlignment="Center" VerticalAlignment="Top" Style="{DynamicResource ResourceKey=styleTabControl}" Width="1024" Height="755">
-            <TabItem Header="Devices" Style="{DynamicResource ResourceKey=styleTabItemLeft}">
+        <TabControl x:Name="menuNavigation" HorizontalAlignment="Center" VerticalAlignment="Top" Style="{DynamicResource ResourceKey=pillTabControl}" Width="1024" Height="755">
+            <TabItem Header="Devices" Style="{DynamicResource ResourceKey=pillTabItemLeft}">
                 <Grid Background="#FFF">
-                    <Button x:Name="btnMSGraphConnect" Content="Connect to Intune (MSGraph)" HorizontalAlignment="Left" Height="77" Margin="10,10,0,0" VerticalAlignment="Top" Width="236"  Style="{DynamicResource ResourceKey=modernButton}"/>
+                    <Button x:Name="btnMSGraphConnect" Content="Connect to Intune (MSGraph)" HorizontalAlignment="Left" Height="77" Margin="10,10,0,0" VerticalAlignment="Top" Width="236" Style="{DynamicResource ResourceKey=ButtonNeonBlueRounded}"/>
                     <Label Content="Connected as:" HorizontalAlignment="Left" Height="23" Margin="252,5,0,0" VerticalAlignment="Top" Width="206" FontSize="10" Foreground="LightGray"/>
                     <TextBox x:Name="txtGraphConnectAs" HorizontalAlignment="Left" Height="17" Margin="252,28,0,0" VerticalAlignment="Top" Width="206" IsEnabled="False" FontSize="10"/>
                     <Label Content="Auth Token Expires:" HorizontalAlignment="Left" Height="23" Margin="252,45,0,0" VerticalAlignment="Top" Width="206" FontSize="10" Foreground="LightGray"/>
                     <TextBox x:Name="txtAuthTokenExpireDate" HorizontalAlignment="Left" Height="17" Margin="252,68,0,0" VerticalAlignment="Top" Width="206" IsEnabled="False" FontSize="10"/>
 
-                    <Button x:Name="btnRefreshList" Content="Refresh" HorizontalAlignment="Left" Margin="369,101,0,0" VerticalAlignment="Top" Width="89" Height="24"/>
+                    <Button x:Name="btnRefreshList" Width="43" HorizontalAlignment="Left" Margin="415,101,0,578" Style="{DynamicResource ResourceKey=ButtonLightBlueRound}">
+                        <StackPanel Width="30" Height="20">
+                            <Rectangle Width="30" Height="20" Fill="white" HorizontalAlignment="Center">
+                                <Rectangle.OpacityMask>
+                                    <VisualBrush Stretch="Fill" Visual="{DynamicResource icons_refresh}"/>
+                                </Rectangle.OpacityMask>
+                            </Rectangle>
+                        </StackPanel>
+                    </Button>
 
                     <Label Content="Devices" HorizontalAlignment="Left" Margin="10,103,0,0" VerticalAlignment="Top" Width="66"/>
-                    <TextBox x:Name="txtSearchIntuneDevices" HorizontalAlignment="Left" Height="24" Margin="81,101,0,0" TextWrapping="Wrap" Text="Search..." VerticalAlignment="Top" Width="282" VerticalContentAlignment="Center"/>
-                    <ListBox x:Name="listIntuneDevices" HorizontalAlignment="Left" Height="510" Margin="10,134,0,0" VerticalAlignment="Top" Width="448" SelectionMode="Single">
+                    <TextBox x:Name="txtSearchIntuneDevices" HorizontalAlignment="Left" Height="24" Margin="81,101,0,0" TextWrapping="Wrap" Text="Search..." VerticalAlignment="Top" Width="329" VerticalContentAlignment="Center"/>
+                    <ListBox x:Name="listIntuneDevices" HorizontalAlignment="Left" Height="510" Margin="10,134,0,0" VerticalAlignment="Top" Width="448" SelectionMode="Single" Style="{DynamicResource ResourceKey=ListBoxLightBlue}">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
                                 <Setter Property="IsSelected" Value="{Binding Selected}" />
@@ -93,85 +112,80 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>-->
                     </ListBox>
-                    <GroupBox Width="513" Height="357" Margin="491,7,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Header="Azure Device" RenderTransformOrigin="0.5,0.5" />
+                    <GroupBox Width="513" Height="345" Margin="491,7,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Header="Azure Device" RenderTransformOrigin="0.5,0.5"  Style="{DynamicResource ResourceKey=LightStyleGroupBox}"/>
 
-                    <Label Content="Selected Device" HorizontalAlignment="Left" Margin="508,27,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" />
-                    <TextBox x:Name="txtSelectedDevice" HorizontalAlignment="Left" Height="22" Margin="651,27,0,0" VerticalAlignment="Top" Width="331" IsEnabled="False" />
-                    <Label Content="Intune Device ID" HorizontalAlignment="Left" Margin="508,54,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" />
-                    <TextBox x:Name="txtDeviceIntuneId" HorizontalAlignment="Left" Height="22" Margin="651,85,0,0" VerticalAlignment="Top" Width="331" IsReadOnly="True" />
-                    <Label Content="Azure Device ID" HorizontalAlignment="Left" Margin="507,81,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" />
-                    <TextBox x:Name="txtDeviceAzureId" HorizontalAlignment="Left" Height="22" Margin="651,56,0,0" VerticalAlignment="Top" Width="331" IsReadOnly="True" />
-                    <Label Content="Joined Type" HorizontalAlignment="Left" Margin="509,109,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" />
-                    <TextBox x:Name="txtDeviceJoinType" HorizontalAlignment="Left" Height="22" Margin="651,113,0,0" VerticalAlignment="Top" Width="331" IsEnabled="False" />
-                    <Label Content="Serial" HorizontalAlignment="Left" Margin="508,136,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" />
-                    <TextBox x:Name="txtDeviceSerial" HorizontalAlignment="Left" Height="22" Margin="652,140,0,0" VerticalAlignment="Top" Width="331" IsReadOnly="True" />
-                    <Label Content="Azure Object ID" HorizontalAlignment="Left" Margin="512,164,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" IsEnabled="False" />
-                    <TextBox x:Name="txtDeviceAzureObjectId" HorizontalAlignment="Left" Height="22" Margin="652,168,0,0" VerticalAlignment="Top" Width="331" IsEnabled="False" />
-                    <Label Content="MDM Authority" HorizontalAlignment="Left" Margin="511,195,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" IsEnabled="False" />
-                    <TextBox x:Name="txtDeviceMDM" HorizontalAlignment="Left" Height="22" Margin="652,197,0,0" VerticalAlignment="Top" Width="331" IsEnabled="False" />
+                    <Label Content="Selected Device" HorizontalAlignment="Left" Margin="508,51,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" />
+                    <TextBox x:Name="txtSelectedDevice" HorizontalAlignment="Left" Height="22" Margin="651,51,0,0" VerticalAlignment="Top" Width="331" IsEnabled="False" />
+                    <Label Content="Intune Device ID" HorizontalAlignment="Left" Margin="508,78,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" />
+                    <TextBox x:Name="txtDeviceIntuneId" HorizontalAlignment="Left" Height="22" Margin="651,109,0,0" VerticalAlignment="Top" Width="331" IsReadOnly="True" />
+                    <Label Content="Azure Device ID" HorizontalAlignment="Left" Margin="507,105,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" />
+                    <TextBox x:Name="txtDeviceAzureId" HorizontalAlignment="Left" Height="22" Margin="651,80,0,0" VerticalAlignment="Top" Width="331" IsReadOnly="True" />
+                    <Label Content="Joined Type" HorizontalAlignment="Left" Margin="509,133,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" />
+                    <TextBox x:Name="txtDeviceJoinType" HorizontalAlignment="Left" Height="22" Margin="651,137,0,0" VerticalAlignment="Top" Width="331" IsEnabled="False" />
+                    <Label Content="Serial" HorizontalAlignment="Left" Margin="508,160,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" />
+                    <TextBox x:Name="txtDeviceSerial" HorizontalAlignment="Left" Height="22" Margin="652,164,0,0" VerticalAlignment="Top" Width="331" IsReadOnly="True" />
+                    <Label Content="Azure Object ID" HorizontalAlignment="Left" Margin="512,188,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" IsEnabled="False" />
+                    <TextBox x:Name="txtDeviceAzureObjectId" HorizontalAlignment="Left" Height="22" Margin="652,192,0,0" VerticalAlignment="Top" Width="331" IsEnabled="False" />
+                    <Label Content="MDM Authority" HorizontalAlignment="Left" Margin="511,219,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" IsEnabled="False" />
+                    <TextBox x:Name="txtDeviceMDM" HorizontalAlignment="Left" Height="22" Margin="652,221,0,0" VerticalAlignment="Top" Width="331" IsEnabled="False" />
 
-                    <Label Content="Compliance" HorizontalAlignment="Left" Margin="512,232,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" />
-                    <CheckBox x:Name="chkDeviceComplianceStatus" Margin="652,238,346,445" IsEnabled="False"></CheckBox>
+                    <Label x:Name="lblDeviceComplianceStatus" Content="Compliance" HorizontalAlignment="Left" Margin="512,243,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" />
+                    <CheckBox x:Name="chkDeviceComplianceStatus" Margin="652,246,323,437" IsEnabled="False" Style="{DynamicResource ResourceKey=DiscretGreenCheckboxStyle}"></CheckBox>
 
-                    <Label Content="Co-Managed" HorizontalAlignment="Left" Margin="508,259,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right" Height="30"/>
-                    <CheckBox x:Name="chkDeviceCoManagedStatus" Margin="652,265,346,419" IsEnabled="False"></CheckBox>
-
-
-
-                    <Label Content="Autopilot Ready" HorizontalAlignment="Left" Margin="508,284,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
-                    <CheckBox x:Name="chkDeviceAutopilotReadyStatus" Margin="652,289,346,393" IsEnabled="False"></CheckBox>
-
-                    <Label Content="Has been Autopiloted" HorizontalAlignment="Left" Margin="822,282,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
-                    <CheckBox x:Name="chkDeviceAutopilotedStatus" Margin="960,289,38,392" IsEnabled="False"></CheckBox>
-
-                    <Label Content="AVD Host" HorizontalAlignment="Left" Margin="513,309,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" />
-                    <CheckBox x:Name="chkDeviceMultiSession" Margin="652,316,347,365" IsEnabled="False"></CheckBox>
-
-                    <TextBox x:Name="txtDeviceStatus" Width="487" Margin="502,332,0,350" HorizontalAlignment="Left" HorizontalContentAlignment="Center" BorderThickness="0" FontWeight="Bold" IsEnabled="False" TextWrapping="Wrap" />
+                    <Label x:Name="lblDeviceCoManagedStatus" Content="Co-Managed" HorizontalAlignment="Left" Margin="508,270,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right" Height="30"/>
+                    <CheckBox x:Name="chkDeviceCoManagedStatus" Margin="652,270,323,414" IsEnabled="False" Style="{DynamicResource ResourceKey=DiscretGreenCheckboxStyle}"></CheckBox>
 
 
-                    <GroupBox Width="513" Margin="492,369,0,59" HorizontalAlignment="Left" Header="Assigned User" RenderTransformOrigin="0.5,0.5" />
-                    <Label Content="User Name" HorizontalAlignment="Left" Margin="508,389,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
-                    <TextBox x:Name="txtAssignedUserName" HorizontalAlignment="Left" Height="22" Margin="652,393,0,0" VerticalAlignment="Top" Width="337" IsEnabled="False"/>
-                    <Label Content="User Email Address" HorizontalAlignment="Left" Margin="508,421,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
-                    <TextBox x:Name="txtAssignedUserEmail" HorizontalAlignment="Left" Height="22" Margin="652,423,0,0" VerticalAlignment="Top" Width="337" IsReadOnly="True"/>
-                    <Label Content="User Principal Name" HorizontalAlignment="Left" Margin="509,452,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
-                    <TextBox x:Name="txtAssignedUserUPN" HorizontalAlignment="Left" Height="22" Margin="652,454,0,0" VerticalAlignment="Top" Width="337" IsReadOnly="True"/>
-                    <Label Content="User Id" HorizontalAlignment="Left" Margin="508,481,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
-                    <TextBox x:Name="txtAssignedUserId" HorizontalAlignment="Left" Height="22" Margin="652,483,0,0" VerticalAlignment="Top" Width="337" IsReadOnly="True"/>
-                    <Label Content="Last Signed in Date" HorizontalAlignment="Left" Margin="511,508,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
-                    <TextBox x:Name="txtAssignedUserLastSignIn" HorizontalAlignment="Left" Height="22" Margin="652,512,0,0" VerticalAlignment="Top" Width="336" IsEnabled="False"/>
-                    <Label Content="On-premise account" HorizontalAlignment="Left" Margin="510,534,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
-                    <CheckBox x:Name="chkAssignedUserADSyncd" Margin="652,540,345,140" IsEnabled="False"></CheckBox>
+
+                    <Label x:Name="lblDeviceAutopilotReadyStatus" Content="Autopilot Ready" HorizontalAlignment="Left" Margin="508,294,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
+                    <CheckBox x:Name="chkDeviceAutopilotReadyStatus" Margin="652,294,323,388" IsEnabled="False" Style="{DynamicResource ResourceKey=DiscretGreenCheckboxStyle}"></CheckBox>
+
+                    <Label x:Name="lblDeviceAutopilotedStatus" Content="Has been Autopiloted" HorizontalAlignment="Left" Margin="813,294,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
+                    <CheckBox x:Name="chkDeviceAutopilotedStatus" Margin="951,294,25,387" IsEnabled="False" Style="{DynamicResource ResourceKey=DiscretGreenCheckboxStyle}"></CheckBox>
+
+                    <Label x:Name="lblDeviceMultiSession" Content="AVD Host" HorizontalAlignment="Left" Margin="513,317,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" />
+                    <CheckBox x:Name="chkDeviceMultiSession" Margin="652,318,323,363" IsEnabled="False" Style="{DynamicResource ResourceKey=DiscretGreenCheckboxStyle}"></CheckBox>
+
+                    <TextBox x:Name="txtDeviceStatus" Width="303" Margin="696,319,0,362" HorizontalAlignment="Left" HorizontalContentAlignment="Center" BorderThickness="0" FontWeight="Bold" IsEnabled="False" TextWrapping="Wrap" />
+
+
+                    <GroupBox Width="513" Margin="492,357,0,59" HorizontalAlignment="Left" Header="Assigned User" RenderTransformOrigin="0.5,0.5"  Style="{DynamicResource ResourceKey=LightStyleGroupBox}"/>
+                    <Label Content="User Name" HorizontalAlignment="Left" Margin="508,395,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
+                    <TextBox x:Name="txtAssignedUserName" HorizontalAlignment="Left" Height="22" Margin="652,399,0,0" VerticalAlignment="Top" Width="337" IsEnabled="False"/>
+                    <Label Content="User Email Address" HorizontalAlignment="Left" Margin="508,427,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
+                    <TextBox x:Name="txtAssignedUserEmail" HorizontalAlignment="Left" Height="22" Margin="652,429,0,0" VerticalAlignment="Top" Width="337" IsReadOnly="True"/>
+                    <Label Content="User Principal Name" HorizontalAlignment="Left" Margin="509,458,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
+                    <TextBox x:Name="txtAssignedUserUPN" HorizontalAlignment="Left" Height="22" Margin="652,460,0,0" VerticalAlignment="Top" Width="337" IsReadOnly="True"/>
+                    <Label Content="User Id" HorizontalAlignment="Left" Margin="508,487,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
+                    <TextBox x:Name="txtAssignedUserId" HorizontalAlignment="Left" Height="22" Margin="652,489,0,0" VerticalAlignment="Top" Width="337" IsReadOnly="True"/>
+                    <Label Content="Last Signed in Date" HorizontalAlignment="Left" Margin="511,514,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
+                    <TextBox x:Name="txtAssignedUserLastSignIn" HorizontalAlignment="Left" Height="22" Margin="652,518,0,0" VerticalAlignment="Top" Width="336" IsEnabled="False"/>
+                    <Label x:Name="lblAssignedUserADSyncd" Content="On-premise account" HorizontalAlignment="Left" Margin="510,538,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
+                    <CheckBox x:Name="chkAssignedUserADSyncd" Margin="652,539,323,141" IsEnabled="False" Style="{DynamicResource ResourceKey=DiscretGreenCheckboxStyle}"></CheckBox>
                     <Label x:Name="lblAssignedUserDN" Content="Distinguished Name" HorizontalAlignment="Left" Margin="510,560,0,0" VerticalAlignment="Top" Width="138" HorizontalContentAlignment="Right"/>
-                    <TextBox x:Name="txtAssignedUserDN" Width="340" Height="76" Margin="652,560,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" IsReadOnly="True" TextWrapping="Wrap" />
+                    <TextBox x:Name="txtAssignedUserDN" Width="340" Height="70" Margin="652,566,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" IsReadOnly="True" TextWrapping="Wrap" />
                 </Grid>
             </TabItem >
-            <TabItem x:Name="tabDetails" Height="28" Margin="0,0,0,-0.5" VerticalAlignment="Top" Header="Details" Style="{DynamicResource ResourceKey=styleTabItemDefault}">
+            <TabItem x:Name="tabDetails" Height="28" Margin="0,0,0,-0.5" VerticalAlignment="Top" Header="Details" Style="{DynamicResource ResourceKey=pillTabItemDefault}">
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="41*"/>
-                        <ColumnDefinition Width="37*"/>
-                    </Grid.ColumnDefinitions>
 
+                    <GroupBox Header="AutoPilot Options" Width="496" Height="170" Margin="507,94,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"  RenderTransformOrigin="0.5,0.5" Style="{DynamicResource ResourceKey=ModernStyleGroupBox}" />
+                    <Label Content="AutoPilot Deployment Profile" Width="167" Margin="522,135,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" />
+                    <ComboBox x:Name="cmbAPProfile" Width="303" Margin="689,140,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{DynamicResource ResourceKey=SimpleComboBoxStyle}" />
+                    <Label Content="AutoPilot Group Tag" Width="167" Margin="522,167,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" />
+                    <TextBox x:Name="txtAPProfileGroupTag" Width="201" Height="22" Margin="689,170,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" TextWrapping="NoWrap" />
+                    <Button x:Name="btnAPProfileChange" Content="Change Group Tag" HorizontalAlignment="Left" Margin="877,221,0,0" VerticalAlignment="Top" Width="115" Height="32" Style="{DynamicResource ResourceKey=ButtonSimpleBlue}"/>
+                    <Button x:Name="btnAPProfileExport" Content="Export Profile" HorizontalAlignment="Left" Margin="522,220,0,0" VerticalAlignment="Top" Width="109" Height="32" Style="{DynamicResource ResourceKey=ButtonSimpleBlue}"/>
 
-                    <GroupBox Header="AutoPilot Options" Width="496" Height="162" Margin="507,102,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"  RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2" />
-                    <Label Content="AutoPilot Deployment Profile" Width="167" Margin="522,126,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Grid.ColumnSpan="2"/>
-                    <ComboBox x:Name="cmbAPProfile" Width="303" Margin="156,130,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Grid.Column="1" />
-                    <Label Content="AutoPilot Group Tag" Width="167" Margin="522,158,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Grid.ColumnSpan="2"/>
-                    <TextBox x:Name="txtAPProfileGroupTag" Width="201" Height="22" Margin="156,160,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" TextWrapping="NoWrap" Grid.Column="1" />
-                    <Button x:Name="btnAPProfileChange" Content="Change" HorizontalAlignment="Left" Margin="371,224,0,0" VerticalAlignment="Top" Width="88" Height="28" Grid.Column="1"/>
-                    <Button x:Name="btnAPProfileExport" Content="Export Profile" HorizontalAlignment="Left" Margin="522,224,0,0" VerticalAlignment="Top" Width="109" Height="28" Grid.ColumnSpan="2"/>
+                    <GroupBox Header="Device Category" Width="496" Height="115" Margin="507,270,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"  RenderTransformOrigin="0.5,0.5" Style="{DynamicResource ResourceKey=ModernStyleGroupBox}"/>
+                    <Label Content="Device Categories" Width="167" Margin="517,309,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" />
+                    <ComboBox x:Name="cmbDeviceCategoryList" Width="303" Margin="689,312,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{DynamicResource ResourceKey=SimpleComboBoxStyle}"/>
+                    <Button x:Name="btnDeviceCategoryChange" Content="Change Category" HorizontalAlignment="Left" Margin="877,342,0,0" VerticalAlignment="Top" Width="115" Height="31" Style="{DynamicResource ResourceKey=ButtonSimpleBlue}"/>
 
-                    <GroupBox Header="Device Category" Width="496" Height="106" Margin="507,270,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"  RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2" />
-                    <Label Content="Device Categories" Width="167" Margin="517,296,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Grid.ColumnSpan="2"/>
-                    <ComboBox x:Name="cmbDeviceCategoryList" Width="303" Margin="156,298,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Grid.Column="1" />
-                    <Button x:Name="btnDeviceCategoryChange" Content="Change" HorizontalAlignment="Left" Margin="371,332,0,0" VerticalAlignment="Top" Width="88" Height="28" Grid.Column="1"/>
-
-                    <GroupBox Width="486" Height="632" Margin="11,10,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Header="Hardware Info" RenderTransformOrigin="0.5,0.5" />
-                    <CheckBox x:Name="chkHardwareDeviceRemote" Width="217" Margin="30,45,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Content="Attempt Device Remote Connection" />
-                    <Button x:Name="btnHardwareDeviceInfo" Content="Retrieve" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="359,30,0,0" Width="128" Height="46"/>
-                    <ListView x:Name="lstHardwareDevice" HorizontalAlignment="Left" Height="548" Margin="30,81,0,0"  VerticalAlignment="Top" Width="457">
+                    <GroupBox Width="486" Height="632" Margin="10,10,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Header="Hardware Info" RenderTransformOrigin="0.5,0.5" Style="{DynamicResource ResourceKey=LightStyleGroupBox}"/>
+                    <CheckBox x:Name="chkHardwareDeviceRemote" Width="324" Margin="30,70,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Content="Attempt Device Remote Connection"  Style="{DynamicResource ResourceKey=GreenSliderCheckBox}"/>
+                    <Button x:Name="btnHardwareDeviceInfo" Content="Retrieve" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="359,53,0,0" Width="128" Height="46" Style="{DynamicResource ResourceKey=ButtonLightBlueRound}"/>
+                    <ListView x:Name="lstHardwareDevice" HorizontalAlignment="Left" Height="522" Margin="21,106,0,0"  VerticalAlignment="Top" Width="465">
                         <ListView.View>
                             <GridView>
                                 <GridViewColumn Header="Name" DisplayMemberBinding="{Binding Key}" />
@@ -180,38 +194,38 @@
                         </ListView.View>
                     </ListView>
 
-                    <Button x:Name="btnViewIntuneAssignments" Width="494" Height="71" Margin="508,18,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Content="View Intune Assignments" Style="{DynamicResource ResourceKey=modernButton}" Grid.ColumnSpan="2"/>
+                    <Button x:Name="btnViewIntuneAssignments" Width="494" Height="78" Margin="508,7,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Content="View Intune Assignments" Style="{DynamicResource ResourceKey=ButtonNeonBlueRounded}"/>
 
-                    <GroupBox Width="498" Height="174" Margin="508,468,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Foreground="Gray" Header="ConfigMgr" Grid.ColumnSpan="2" />
-                    <Label Width="60" Margin="525,491,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Site Code" Grid.ColumnSpan="2" />
-                    <TextBox x:Name="txtCMSiteCode" Width="42" Height="22" Margin="53,495,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" MaxLength="3" TextWrapping="NoWrap" Grid.Column="1" />
-                    <Label Width="62" Margin="95,491,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Site Sever" Grid.Column="1" />
-                    <TextBox x:Name="txtCMSiteServer" Width="144" Height="22" Margin="157,495,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" TextWrapping="NoWrap" Grid.Column="1" />
-                    <ComboBox x:Name="cmbCMSiteAttribute" Width="301" Margin="158,550,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Grid.Column="1" />
-                    <TextBox x:Name="txtCMSiteResult" Width="309" Height="46" Margin="0,583,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" TextWrapping="Wrap" Grid.Column="1" />
-                    <Label Width="156" Margin="0,548,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Retrieve CM Attribute" Grid.Column="1" />
-                    <TextBlock x:Name="tbCMSiteSearchHelp" Width="14" Margin="463,478,0,123" HorizontalAlignment="Left" TextWrapping="Wrap" Grid.Column="1"><Run BaselineAlignment="Center" Cursor="Hand" Text="?" /></TextBlock>
-                    <Button x:Name="btnCMSiteSync" Content="Sync w/ CM" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="331,583,0,0" Width="128" Height="46" Grid.Column="1"/>
+                    <GroupBox Width="498" Height="249" Margin="508,393,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Foreground="Gray" Header="ConfigMgr" Grid.ColumnSpan="2" Style="{DynamicResource ResourceKey=ModernStyleGroupBox}" />
+                    <Label Width="60" Margin="525,440,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Site Code" Grid.ColumnSpan="2" />
+                    <TextBox x:Name="txtCMSiteCode" Width="42" Height="22" Margin="589,444,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" MaxLength="3" TextWrapping="NoWrap" />
+                    <Label Width="62" Margin="631,440,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Site Sever" />
+                    <TextBox x:Name="txtCMSiteServer" Width="144" Height="22" Margin="693,444,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" TextWrapping="NoWrap" />
+                    <ComboBox x:Name="cmbCMSiteAttribute" Width="302" Margin="693,475,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{DynamicResource ResourceKey=SimpleComboBoxStyle}"/>
+                    <TextBox x:Name="txtCMSiteResult" Width="310" Height="46" Margin="535,508,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" TextWrapping="Wrap" />
+                    <Label Width="156" Margin="535,473,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Retrieve CM Attribute" />
+                    <TextBlock x:Name="tbCMSiteSearchHelp" Width="14" Margin="459,397,0,276" HorizontalAlignment="Left" TextWrapping="Wrap" Grid.Column="1"><Run BaselineAlignment="Center" Cursor="Hand" Text="?" Foreground="White" /></TextBlock>
+                    <Button x:Name="btnCMSiteSync" Content="Sync w/ CM" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="849,508,0,0" Width="146" Height="46" Style="{DynamicResource ResourceKey=ButtonSimpleBlue}"/>
                 </Grid>
             </TabItem>
-            <TabItem x:Name="tabRenamer" Header="Renamer" Style="{DynamicResource ResourceKey=styleTabItemDefault}">
+            <TabItem x:Name="tabRenamer" Header="Renamer" Style="{DynamicResource ResourceKey=pillTabItemDefault}">
                 <Grid>
-                    <GroupBox Width="543" Height="164" Margin="15,13,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Header="AD User Info" RenderTransformOrigin="0.5,0.5" />
-                    <Button x:Name="btnADUserSync" Content="Sync User w/ AD" HorizontalAlignment="Left" Margin="416,35,0,0" VerticalAlignment="Top" Width="128" Height="46"/>
-                    <Label Content="User Object" Width="109" Margin="19,99,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" />
-                    <TextBox x:Name="txtADUserDN" Width="411" Height="65" Margin="133,99,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" IsReadOnly="True" TextWrapping="Wrap" />
+                    <GroupBox Width="543" Height="170" Margin="10,7,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Header="AD User Info" RenderTransformOrigin="0.5,0.5"  Style="{DynamicResource ResourceKey=LightStyleGroupBox}" />
+                    <Button x:Name="btnADUserSync" Content="Sync User w/ AD" HorizontalAlignment="Left" Margin="374,48,0,0" VerticalAlignment="Top" Width="166" Height="46"/>
+                    <Label Content="User Object" Width="109" Margin="15,99,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" />
+                    <TextBox x:Name="txtADUserDN" Width="411" Height="65" Margin="129,99,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" IsReadOnly="True" TextWrapping="Wrap" />
 
-                    <GroupBox Width="543" Height="162" Margin="15,187,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Header="AD Computer Info" RenderTransformOrigin="0.5,0.5" />
-                    <Button x:Name="btnADComputerSync" Content="Sync Computer w/ AD" HorizontalAlignment="Left" Margin="416,212,0,0" VerticalAlignment="Top" Width="128" Height="46"/>
-                    <Label Content="Computer Object" Width="109" Margin="19,273,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" />
-                    <TextBox x:Name="txtADComputerDN" Width="411" Height="65" Margin="133,274,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" IsReadOnly="True" TextWrapping="Wrap" />
+                    <GroupBox Width="543" Height="167" Margin="10,182,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Header="AD Computer Info" RenderTransformOrigin="0.5,0.5"  Style="{DynamicResource ResourceKey=LightStyleGroupBox}"/>
+                    <Button x:Name="btnADComputerSync" Content="Sync Computer w/ AD" HorizontalAlignment="Left" Margin="374,223,0,0" VerticalAlignment="Top" Width="166" Height="46"/>
+                    <Label Content="Computer Object" Width="109" Margin="15,273,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" />
+                    <TextBox x:Name="txtADComputerDN" Width="411" Height="65" Margin="129,274,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" IsReadOnly="True" TextWrapping="Wrap" />
 
-                    <Button x:Name="btnNewDeviceNameGen" Content="Generate New Name" HorizontalAlignment="Left" Margin="15,361,0,0" VerticalAlignment="Top" Width="128" Height="46"/>
-                    <Label Content="New Device Name:" HorizontalAlignment="Left" Height="26" Margin="154,385,0,0" VerticalAlignment="Top" Width="148"/>
-                    <TextBox x:Name="txtNewDeviceName" HorizontalAlignment="Left" Height="36" Margin="15,416,0,0" VerticalAlignment="Top" Width="466" FontSize="24"/>
-                    <CheckBox x:Name="chkNewDeviceNameIncrement" Content="Increment (Next available)" HorizontalAlignment="Left" Margin="160,367,0,0" VerticalAlignment="Top" />
-                    <CheckBox x:Name="chkNewDeviceNameMoveOU" Content="Move to OU" HorizontalAlignment="Left" Margin="275,463,0,0" VerticalAlignment="Top"/>
-                    <Button x:Name="btnNewDeviceName" Content="Rename Device" HorizontalAlignment="Left" Margin="15,459,0,0" VerticalAlignment="Top" Width="255" Height="148" Style="{DynamicResource ResourceKey=modernButton}"/>
+                    <Button x:Name="btnNewDeviceNameGen" Content="Generate New Name" HorizontalAlignment="Left" Margin="10,361,0,0" VerticalAlignment="Top" Width="157" Height="46" Style="{DynamicResource ResourceKey=ButtonSimpleBlue}"/>
+                    <Label Content="New Device Name:" HorizontalAlignment="Left" Height="26" Margin="173,387,0,0" VerticalAlignment="Top" Width="148"/>
+                    <TextBox x:Name="txtNewDeviceName" HorizontalAlignment="Left" Height="36" Margin="10,418,0,0" VerticalAlignment="Top" Width="466" FontSize="24"/>
+                    <CheckBox x:Name="chkNewDeviceNameIncrement" Content="Increment (Next available)" HorizontalAlignment="Left" Margin="179,364,0,0" VerticalAlignment="Top" Style="{DynamicResource ResourceKey=GreenSliderCheckBox}" Width="361"/>
+                    <CheckBox x:Name="chkNewDeviceNameMoveOU" Content="Move to OU" HorizontalAlignment="Left" Margin="275,459,0,0" VerticalAlignment="Top" Style="{DynamicResource ResourceKey=GreenSliderCheckBox}" Width="281"/>
+                    <Button x:Name="btnNewDeviceName" Content="Rename Device" HorizontalAlignment="Left" Margin="10,459,0,0" VerticalAlignment="Top" Width="255" Height="148" Style="{DynamicResource ResourceKey=ButtonNeonBlueRounded}"/>
                     <TextBox x:Name="txtNewDeviceNameStatus" Width="555" Margin="10,614,0,58" HorizontalAlignment="Left" HorizontalContentAlignment="Center" BorderThickness="0" FontWeight="Bold" IsEnabled="False" />
 
                     <GroupBox Width="429" Height="140" Margin="581,389,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Foreground="Gray" Header="AD Device Search Filter Rules" />
@@ -219,7 +233,7 @@
                     <TextBox x:Name="txtSearchFilter" Width="312" Height="82" Margin="682,439,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" TextWrapping="Wrap" />
                     <Label
 Width="64" Margin="613,409,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Search in" />
-                    <ComboBox x:Name="cmbSearchInOptions" Width="312" Margin="682,411,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                    <ComboBox x:Name="cmbSearchInOptions" Width="312" Margin="682,411,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{DynamicResource ResourceKey=SimpleComboBoxStyle}"/>
                     <TextBlock x:Name="tbADSearchHelp" Width="14" Margin="996,401,0,179" HorizontalAlignment="Left" TextWrapping="Wrap"><Run BaselineAlignment="Center" Cursor="Hand">?</Run></TextBlock>
                     <GroupBox Width="283" Height="122" Margin="275,487,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Foreground="Gray" Header="Move Ou" />
                     <Label Width="31" Height="26" Margin="271,516,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="OU" />
@@ -231,7 +245,7 @@ Width="64" Margin="613,409,0,0" HorizontalAlignment="Left" VerticalAlignment="To
                     <TextBox x:Name="txtRulePrefix" Width="126" Height="24" Margin="678,35,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" MaxLength="10" TextWrapping="Wrap" />
                     <Label Width="70" Margin="602,33,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Add Prefix" />
                     <CheckBox x:Name="chkDoRegex" Width="196" Margin="680,102,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Content="Use Additional Regex Rules" />
-                    <ComboBox x:Name="cmbQueryRule" Width="204" Margin="678,71,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                    <ComboBox x:Name="cmbQueryRule" Width="204" Margin="678,71,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{DynamicResource ResourceKey=SimpleComboBoxStyle}"/>
                     <Label Width="76" Margin="602,68,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Query From" />
                     <TextBox x:Name="txtRuleRegex1" Width="131" Height="24" Margin="678,124,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" TextWrapping="Wrap" />
                     <Label Width="45" Margin="628,124,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Rule 1" />
@@ -248,23 +262,23 @@ Width="64" Margin="613,409,0,0" HorizontalAlignment="Left" VerticalAlignment="To
                     <TextBox x:Name="txtResults" Width="320" Height="24" Margin="677,613,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" IsEnabled="False" TextWrapping="Wrap" />
                     <Button x:Name="btnTestSample" Width="52" Height="22" Margin="943,585,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Content="Test" />
                     <TextBlock x:Name="tbRuleTesterHelp" Width="14" Margin="1001,549,0,69" HorizontalAlignment="Left" TextWrapping="Wrap"><Run BaselineAlignment="Center" Cursor="Hand">?</Run></TextBlock>
-                    <ComboBox x:Name="cmbRuleAbbrType" Width="131" Margin="679,182,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                    <ComboBox x:Name="cmbRuleAbbrType" Width="131" Margin="679,182,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{DynamicResource ResourceKey=SimpleComboBoxStyle}"/>
                     <Label Width="65" Margin="614,179,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Abbr type" />
-                    <TextBox x:Name="txtRuleAbbrKey" Width="315" Height="52" Margin="678,239,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" TextWrapping="Wrap" />
-                    <Label Width="65" Height="24" Margin="612,239,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Abbr Key:" />
-                    <Label x:Name="lblAbbrExample" Width="339" Margin="654,283,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="eg. Laptop=L, Notebook=N, Tablet=T, Desktop=D, Tower=D" FontSize="8" />
-                    <Label Width="85" Margin="594,210,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Abbr Position" />
-                    <ComboBox x:Name="cmbRuleAbbrPosition" Width="109" Margin="679,212,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                    <TextBox x:Name="txtRuleAbbrKey" Width="315" Height="52" Margin="679,212,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" TextWrapping="Wrap" />
+                    <Label Width="65" Height="24" Margin="613,212,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Abbr Key:" />
+                    <Label x:Name="lblAbbrExample" Width="339" Margin="655,256,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="eg. Laptop=L, Notebook=N, Tablet=T, Desktop=D, Tower=D" FontSize="8" />
+                    <Label Width="86" Margin="594,280,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Abbr Position" />
+                    <ComboBox x:Name="cmbRuleAbbrPosition" Width="109" Margin="680,282,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{DynamicResource ResourceKey=SimpleComboBoxStyle}"/>
                     <Label Width="68" Margin="611,309,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Add Digits" />
-                    <ComboBox x:Name="cmbRuleAddDigits" Width="82" Margin="679,313,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                    <ComboBox x:Name="cmbRuleAddDigits" Width="82" Margin="679,313,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{DynamicResource ResourceKey=SimpleComboBoxStyle}"/>
                     <Label Width="86" Margin="593,343,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" HorizontalContentAlignment="Right" Content="Digit Position" />
-                    <ComboBox x:Name="cmbRuleDigitPosition" Width="82" Margin="679,345,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" />
-                    <TextBlock x:Name="tbRuleGenHelp" Width="14" Margin="994,10,0,393" HorizontalAlignment="Left" TextWrapping="Wrap"><Run BaselineAlignment="Center" Cursor="Hand">?</Run></TextBlock>
+                    <ComboBox x:Name="cmbRuleDigitPosition" Width="82" Margin="679,345,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{DynamicResource ResourceKey=SimpleComboBoxStyle}"/>
+                    <TextBlock x:Name="tbRuleGenHelp" Width="14" Margin="994,22,0,610" HorizontalAlignment="Left" TextWrapping="Wrap"><Run BaselineAlignment="Center" Cursor="Hand">?</Run></TextBlock>
                     <Rectangle HorizontalAlignment="Left" Height="645" Margin="567,0,0,0" Fill="#E5E4E2" VerticalAlignment="Top" Width="451" Panel.ZIndex="-1"/>
                 </Grid>
             </TabItem>
 
-            <TabItem Header="Logging" Style="{DynamicResource ResourceKey=styleTabItemRight}">
+            <TabItem Header="Logging" Style="{DynamicResource ResourceKey=pillTabItemRight}">
                 <Grid Background="#FFF">
                     <Label x:Name="OutputQueueText" Content="0" HorizontalAlignment="Left" Height="28" Margin="62.638,80,0,0" VerticalAlignment="Top" Width="148" VerticalContentAlignment="Bottom" Padding="2,5,5,5" Grid.Column="1"/>
                     <RichTextBox x:Name="Logging" HorizontalAlignment="Center" Height="630" Margin="0,10,0,0"  VerticalAlignment="Top" IsReadOnly="True" Width="994" VerticalScrollBarVisibility="Auto">
@@ -302,8 +316,8 @@ Width="64" Margin="613,409,0,0" HorizontalAlignment="Left" VerticalAlignment="To
         <TextBox x:Name="txtVersion" Margin="957,0,15,13" FontSize="10" Foreground="Blue" FontWeight="Bold" TextWrapping="NoWrap" IsReadOnly="True" VerticalAlignment="Bottom" IsEnabled="False" BorderThickness="0" />
 
         <TextBox x:Name="txtStatus" HorizontalAlignment="Center" Margin="0,700,0,45" Width="724" IsEnabled="False" BorderThickness="0" HorizontalContentAlignment="Center" TextWrapping="Wrap"/>
-        <Button x:Name="btnBack" Content="Back" HorizontalAlignment="Left" VerticalAlignment="Top"  Width="124" Height="50" Margin="13,700,0,0" FontSize="16" />
-        <Button x:Name="btnExit" Content="Exit" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="890,700,0,0" Width="124" Height="50" FontSize="16"/>
+        <Button x:Name="btnBack" Content="Back" HorizontalAlignment="Left" VerticalAlignment="Top"  Width="124" Height="50" Margin="13,700,0,0" FontSize="16" Style="{DynamicResource ResourceKey=ButtonDarkBlueSquare}"/>
+        <Button x:Name="btnExit" Content="Exit" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="890,700,0,0" Width="124" Height="50" FontSize="16" Style="{DynamicResource ResourceKey=ButtonDarkBlueSquare}"/>
         <ProgressBar x:Name="ProgressBar" Width="711" Height="4" Margin="148,746,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Background="White" Foreground="LightGreen" />
         <TextBox x:Name="txtPercentage" Text="100%" HorizontalAlignment="Left" Height="16" VerticalAlignment="Top" Width="26" FontSize="8" IsEnabled="False" Margin="859,742,0,0" BorderThickness="0"/>
     </Grid>

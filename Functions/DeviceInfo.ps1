@@ -69,7 +69,9 @@ Function Get-PlatformInfo {
             "Chassis" = $ChassisType
             }
     }
-    catch{Write-Output "CRITICAL" "Failed to get information from Win32_Computersystem/ Win32_BIOS"}
+    catch{
+        Write-error ("Failed to get information for device: {0}. {1}" -f $DeviceName, $_.exception.message)
+    }
 }
 #endregion
 
@@ -97,11 +99,11 @@ Function Get-NewDeviceName {
         If($RegexRules['RuleRegex2']){$regexArray += $RegexRules['RuleRegex2']}
         If($RegexRules['RuleRegex3']){$regexArray += $RegexRules['RuleRegex3']}
         If($RegexRules['RuleRegex4']){$regexArray += $RegexRules['RuleRegex4']}
-    
+
         $r=0
         #save query to working sample for processing
         $WorkingSample = $Query
-    
+
         #loop through each regex rule to break apart working sample
         Foreach($Regex in $regexArray){
             $r++

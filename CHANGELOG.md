@@ -1,5 +1,13 @@
 # Change log for IntuneDeviceManagerUI.ps1
 
+## 1.4.2 - July 7, 2022
+
+- Change the function of refresh button to update list instead or use cache list.
+- Added more modern look to dropdowns, buttons, and checkboxes.
+- Added Device filter to limit device retrieval; helps with msgraph limit
+- Working multi-threaded pieces; allowing faster load time for assignments
+- Added data output for troubleshooting; graph, properties and data out
+
 ## 1.4.1 - June 29, 2022
 
 - Added progress UI; shows status messages clearer.

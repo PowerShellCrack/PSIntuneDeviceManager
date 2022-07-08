@@ -762,7 +762,7 @@ $ui_btnMSGraphConnect.Add_Click({
         }Else{
             $DeviceParams = @{AuthToken=$Global:AuthToken}
         }
-        $Global:ManagedDevices = @(Get-IDMDevices @DeviceParams)  # | Select deviceName,model,complianceState,deviceEnrollmentType,operatingSystem
+        $Global:ManagedDevices = @(Get-IDMDevice @DeviceParams)  # | Select deviceName,model,complianceState,deviceEnrollmentType,operatingSystem
         If($Global:ManagedDevices.count -gt 0)
         {
             $ui_btnRefreshList.IsEnabled = $true

@@ -1,4 +1,4 @@
-Function Get-IDMDevices{
+Function Get-IDMDevice{
 
     <#
     .SYNOPSIS
@@ -6,13 +6,13 @@ Function Get-IDMDevices{
     .DESCRIPTION
     The function connects to the Graph API Interface and gets any Intune Managed Device
     .EXAMPLE
-    Get-IDMDevices
+    Get-IDMDevice
     Returns all managed devices but excludes EAS devices registered within the Intune Service
     .EXAMPLE
-    Get-IDMDevices -IncludeEAS
+    Get-IDMDevice -IncludeEAS
     Returns all managed devices including EAS devices registered within the Intune Service
     .NOTES
-    NAME: Get-IDMDevices
+    NAME: Get-IDMDevice
     #>
 
     [cmdletbinding()]
@@ -21,6 +21,9 @@ Function Get-IDMDevices{
         [Parameter(Mandatory=$false)]
         [ValidateSet('Windows','Android','MacOS','iOS')]
         [string]$Platform,
+
+        [Parameter(Mandatory=$false)]
+        [string]$Filter,
 
         [Parameter(Mandatory=$false)]
         [switch]$IncludeEAS,
@@ -38,25 +41,37 @@ Function Get-IDMDevices{
     # Defining Variables
     $graphApiVersion = "beta"
     $Resource = "deviceManagement/managedDevices"
-    $Count_Params = 0
 
-    if($IncludeEAS.IsPresent){ $Count_Params++ }
-    if($ExcludeMDM.IsPresent){ $Count_Params++ }
+    $Query = @()
+    $Count_maParams = 0
+    if($IncludeEAS.IsPresent){$Count_maParams++}
 
-    if($Count_Params -gt 1){
+    if($ExcludeMDM.IsPresent){
+        $Count_maParams++
+        $Query += "managementAgent eq 'eas'"
+    }
+
+    if($IncludeEAS -eq $false -and $ExcludeMDM -eq $false){
+        $Query += "managementAgent eq 'easmdm'"
+        $Query += "managementAgent eq 'mdm'"
+        Write-Warning "EAS Devices are excluded by default, please use -IncludeEAS if you want to include those devices"
+    }
+
+    If($PSBoundParameters.ContainsKey('Filter')){
+        $Query += "contains(deviceName,'$($Filter)')"
+    }
+
+    If($PSBoundParameters.ContainsKey('Platform')){
+        $Query += "operatingSystem eq '$($Platform)'"
+    }
+
+    $filterQuery = "`?`$filter=" + ($Query -join ' and ')
+
+    if($Count_maParams -gt 1){
         write-error "Multiple parameters set, specify a single parameter -IncludeEAS, -ExcludeMDM or no parameter against the function"
     }
-
-    elseif($IncludeEAS){
-        $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource"
-    }
-
-    elseif($ExcludeMDM){
-        $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource`?`$filter=managementAgent eq 'eas'"
-    }
     else {
-        $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource`?`$filter=managementAgent eq 'mdm' and managementAgent eq 'easmdm'"
-        Write-Warning "EAS Devices are excluded by default, please use -IncludeEAS if you want to include those devices"
+        $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource" + $filterQuery
     }
 
     try {
@@ -107,15 +122,9 @@ Function Get-IDMDevices{
         $Devices = $Response.Value
     }
 
-
-    If($PSBoundParameters.ContainsKey('Platform')){
-        return $Devices | Where{ $_.operatingSystem -eq $Platform}
-    }
-    Else{
-        return $Devices
-    }
-
+    return $Devices
 }
+
 
 Function Get-IDMAzureDevices{
 <#
@@ -1108,200 +1117,250 @@ Function Get-IDMDevicePending{
     }
 }
 
-Function Get-IDMDeviceAssignments{
+Function Get-IDMIntuneAssignments{
     Param(
+
+        [Parameter(Mandatory=$true)]
+        [string]$TargetId,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateSet('Devices','Users','Both')]
+        [string]$Target = 'Both',
+
+        [Parameter(Mandatory=$false)]
         [ValidateSet('Windows','Android','MacOS','iOS')]
-        $Platform = 'Windows',
-        $DeviceId,
+        [string]$Platform = 'Windows',
+
+        [Parameter(Mandatory=$false)]
+        [switch]$IncludePolicySetInherits,
+
+        [Parameter(Mandatory=$false)]
         $AuthToken = $Global:AuthToken
     )
 
     <#SAMPLE
     $AuthToken = $synchash.data.AuthToken
-    $DeviceId = '6e8d5d00-6fff-46df-8d61-337399a3c123'
-    $DeviceId = 'b215decf-4188-4d19-9e22-fb2e89ae0fec'
-    $DeviceId = '08d06b3b-8513-417b-80ee-9dc8a3beb377'
+    $TargetId = '6e8d5d00-6fff-46df-8d61-337399a3c123'
+    $TargetId = 'b215decf-4188-4d19-9e22-fb2e89ae0fec'
+    $TargetId = 'b215decf-4188-4d19-9e22-fb2e89ae0fec'
     #>
     $graphApiVersion = "beta"
 
     #First get all Azure AD groups this device is a member of.
-    $Resource = "devices"
-    $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)/$DeviceID/memberOf"
-    $DeviceGroups = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
-    $MemberOfGroups = $DeviceGroups | Select id, displayName,@{N='GroupType';E={If('DynamicMembership' -in $_.groupTypes){return 'Dynamic'}Else{return 'Static'} }}
-
-    #loop through each Intune Component, then get assignments for each
-    Switch($Platform){
-        'Windows' {
-                $PlatformType = @('microsoftStore',
-                                'win32LobApp',
-                                'windows',
-                                'officeSuiteApp',
-                                'sharedPC',
-                                'editionUpgrade',
-                                'webApp'
-                )
-
-                $Resources = @{
-                    'Compliance Policy' = 'deviceManagement/deviceCompliancePolicies'
-                    'Compliance Scripts' = 'deviceManagement/deviceComplianceScripts'
-                    'Configuration Profile' = 'deviceManagement/deviceConfigurations'
-                    'Enrollment Configuration' = 'deviceManagement/deviceEnrollmentConfigurations'
-                    'Proactive Remediation' = 'deviceManagement/deviceHealthScripts'
-                    'Powershell Scripts' = 'deviceManagement/deviceManagementScripts'
-                    'Scope Tag' = 'deviceManagement/roleScopeTags'
-                    'PolicySet' = 'deviceAppManagement/policysets'
-                    'Quality Updates' = 'deviceManagement/windowsQualityUpdateProfiles'
-                    'Feature Updates' = 'deviceManagement/windowsFeatureUpdateProfiles'
-                    'Apps' = 'deviceAppManagement/mobileApps'
-                    'WIP Policies' = 'deviceAppManagement/windowsInformationProtectionPolicies'
-                    'MDM WIP Policies' = 'deviceAppManagement/mdmWindowsInformationProtectionPolicies'
-                }
-        }
-
-        'Android' {$PlatformType = @('android',
-                                    'webApp',
-                                    'aosp'
-                                    )
-        }
-
-        'MacOS'   {$PlatformType = @('IOS',
-                                    'macOS',
-                                    'webApp'
-                                    )
-        }
-
-        'iOS'     {$PlatformType = @('ios',
-                                    'webApp'
-                                    )
-        }
-    }
-
-    $ResourceAssignments = @()
-    #TEST $Resources =  @{'Apps' = 'deviceAppManagement/mobileApps'}
-    #TEST $uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps"
-    #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/deviceCompliancePolicies"
-    #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/deviceConfigurations"
-    #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/windowsQualityUpdateProfiles"
-    Foreach($ResourceItem in $Resources.GetEnumerator())
+    $Resources = @()
+    If($Target -eq 'Both')
     {
-        $uri = "https://graph.microsoft.com/$graphApiVersion/$($ResourceItem.Value)"
-        $ResourceResult = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
-        #$ResourceResult | Select displayname, applicableDeviceType,'@odata.type' -Unique
-        #Filter on Platform if it exists
-        If($ResourceResult.'@odata.type'){
-            $ResourceResult = ($ResourceResult | Where '@odata.type' -match ($PlatformType -join '|'))
-        }
-
-        #TEST $Item = $ResourceResult[-1]
-        #TEST $Item = $ResourceResult | Where id -eq 'ca8b2b92-87fe-4a83-b0d5-1f970bae7ea4'
-        #TEST $uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/ca8b2b92-87fe-4a83-b0d5-1f970bae7ea4/assignments"
-        #TEST $uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/ae3e6923-b240-4914-ab09-76222bc926f7/assignments"
-        #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/deviceManagementScripts/d9954a7f-e264-4de7-af9c-28ce77c3fed6/assignments"
-        Foreach($Item in $ResourceResult)
-        {
-            $uri = "https://graph.microsoft.com/$graphApiVersion/$($ResourceItem.Value)/$($Item.id)/assignments"
-            Try{
-                $Assignments = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
-
-                Foreach($Assignment in $Assignments)
-                {
-                    $AssignmentsGroup = '' | Select Name,Type,Mode,Target,Platform,Group,GroupType
-                    $AssignmentsGroup.Name = $Item.displayName
-                    $AssignmentsGroup.Type = $ResourceItem.Key
-                    $AssignmentsGroup.Mode = $Assignment.intent
-                    $AssignmentsGroup.Target = 'Device'
-                    $AssignmentsGroup.Platform = $Platform
-
-                    switch($Assignment.target.'@odata.type'){
-                        '#microsoft.graph.allDevicesAssignmentTarget' {
-                            $AddToGroup = $true
-                            $AssignmentsGroup.Mode = 'Assigned'
-                            $AssignmentsGroup.Group = 'All Devices'
-                            $AssignmentsGroup.GroupType = 'Built-In'
-                        }
-
-                        '#microsoft.graph.exclusionGroupAssignmentTarget' {
-                            $AssignmentsGroup.Mode = 'Excluded'
-                            $TargetAssignments = $Assignment.target | Where '@odata.type' -eq '#microsoft.graph.exclusionGroupAssignmentTarget'
-                            #$Group = $TargetAssignments.GroupId[-1]
-                            Foreach($Group in $TargetAssignments.GroupId)
-                            {
-                                If($Group -in $MemberOfGroups.id){
-                                    $AddToGroup = $true
-                                    $AssignmentsGroup.Group = ($MemberOfGroups | Where id -eq $Group).displayName
-                                    $AssignmentsGroup.GroupType = ($MemberOfGroups | Where id -eq $Group).GroupType
-                                }Else{
-                                    $AddToGroup = $false
-                                }
-                            }
-                        }
-
-                        '#microsoft.graph.groupAssignmentTarget' {
-                            $AssignmentsGroup.Mode = 'Assigned'
-                            $TargetAssignments = $Assignment.target | Where '@odata.type' -eq '#microsoft.graph.groupAssignmentTarget'
-                            Foreach($Group in $TargetAssignments.GroupId)
-                            {
-                                If($Group -in $MemberOfGroups.id){
-                                    $AddToGroup = $true
-                                    $AssignmentsGroup.Group = ($MemberOfGroups | Where id -eq $Group).displayName
-                                    $AssignmentsGroup.GroupType = ($MemberOfGroups | Where id -eq $Group).GroupType
-                                }Else{
-                                    $AddToGroup = $false
-                                }
-                            }
-                        }
-                        default {$AddToGroup = $false}
-                    }
-
-                    If($AddToGroup){
-                        $ResourceAssignments += $AssignmentsGroup
-                    }
-                }
-
-                <#add alldevice to assignment list
-                If($Assignments.target.'@odata.type' -eq '#microsoft.graph.allDevicesAssignmentTarget')
-                {
-                    $Assignments | Where {$_.target.'@odata.type' -eq '#microsoft.graph.allDevicesAssignmentTarget'} | %{
-                        $AssignmentsGroup.Mode = $_.intent
-                        $AssignmentsGroup.Group = 'All Devices'
-                        $AssignmentsGroup.GroupType = 'Built-In'
-                        $ResourceAssignments += $AssignmentsGroup
-                    }
-                }
-                Else{
-                    #TEST $Group = $Assignments.groupid[0]
-                    Foreach($Group in $Assignments.target)
-                    {
-                        switch($Group.'@odata.type'){
-                            "#microsoft.graph.exclusionGroupAssignmentTarget" {$AssignmentsGroup.Mode = 'Excluded'}
-                            "#microsoft.graph.groupAssignmentTarget" {If([string]::IsNullOrEmpty($Assignments.intent)){$AssignmentsGroup.Mode = 'Assigned'}}
-                            default {If([string]::IsNullOrEmpty($Assignments.intent)){$AssignmentsGroup.Mode = 'Assigned'}}
-                        }
-
-                        If($Group.groupid -in $MemberOfGroups.id){
-                            $AssignmentsGroup.Group = ($MemberOfGroups | Where id -eq $Group.groupid).displayName
-                            $AssignmentsGroup.GroupType = ($MemberOfGroups | Where id -eq $Group.groupid).GroupType
-                            $ResourceAssignments += $AssignmentsGroup
-                        }
-                    }
-                }
-                #>
-
-            }
-            Catch{
-                $ex = $_.Exception
-                $errorResponse = $ex.Response.GetResponseStream()
-                $reader = New-Object System.IO.StreamReader($errorResponse)
-                $reader.BaseStream.Position = 0
-                $reader.DiscardBufferedData()
-                $responseBody = $reader.ReadToEnd();
-                Write-Host "Response content:`n$responseBody" -f Red
-                Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
-
-            }
-        }
+        $Resources += 'devices'
+        $Resources += 'users'
     }
+    Else{
+        $Resources += $Target.ToLower()
+    }
+
+    #loop though each resource
+    #TEST $Resource = 'devices'
+    Foreach($Resource in $Resources)
+    {
+        $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)/$TargetId/memberOf"
+        $DeviceGroups = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
+        $MemberOfGroups = $DeviceGroups | Select id, displayName,@{N='GroupType';E={If('DynamicMembership' -in $_.groupTypes){return 'Dynamic'}Else{return 'Static'} }}
+
+        #loop through each Intune Component, then get assignments for each
+        Switch($Platform){
+            'Windows' {
+                    $PlatformType = @('microsoftStore',
+                                    'win32LobApp',
+                                    'windows',
+                                    'officeSuiteApp',
+                                    'sharedPC',
+                                    'editionUpgrade',
+                                    'webApp'
+                    )
+
+                    $Resources = @{
+                        'Compliance Policy' = 'deviceManagement/deviceCompliancePolicies'
+                        'Compliance Scripts' = 'deviceManagement/deviceComplianceScripts'
+                        'Configuration Profile' = 'deviceManagement/deviceConfigurations'
+                        'Enrollment Configuration' = 'deviceManagement/deviceEnrollmentConfigurations'
+                        'Proactive Remediation' = 'deviceManagement/deviceHealthScripts'
+                        'Powershell Scripts' = 'deviceManagement/deviceManagementScripts'
+                        'Scope Tag' = 'deviceManagement/roleScopeTags'
+                        'Quality Updates' = 'deviceManagement/windowsQualityUpdateProfiles'
+                        'Feature Updates' = 'deviceManagement/windowsFeatureUpdateProfiles'
+                        'WIP Policies' = 'deviceAppManagement/windowsInformationProtectionPolicies'
+                        'MDM WIP Policies' = 'deviceAppManagement/mdmWindowsInformationProtectionPolicies'
+                        'Apps' = 'deviceAppManagement/mobileApps'
+                        'PolicySet' = 'deviceAppManagement/policysets'
+                    }
+            }
+
+            'Android' {$PlatformType = @('android',
+                                        'webApp',
+                                        'aosp'
+                                        )
+            }
+
+            'MacOS'   {$PlatformType = @('IOS',
+                                        'macOS',
+                                        'webApp'
+                                        )
+            }
+
+            'iOS'     {$PlatformType = @('ios',
+                                        'webApp'
+                                        )
+            }
+        }
+
+
+
+
+
+        $ResourceAssignments = @()
+        #TEST $Resources =  @{'Apps' = 'deviceAppManagement/mobileApps'}
+        #TEST $uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps"
+        #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/deviceCompliancePolicies"
+        #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/deviceConfigurations"
+        #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/windowsQualityUpdateProfiles"
+        Foreach($ResourceItem in $Resources.GetEnumerator())
+        {
+            $uri = "https://graph.microsoft.com/$graphApiVersion/$($ResourceItem.Value)"
+            $ResourceResult = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
+            #$ResourceResult | Select displayname, applicableDeviceType,'@odata.type' -Unique
+            #Filter on Platform if it exists
+            If($ResourceResult.'@odata.type'){
+                $ResourceResult = ($ResourceResult | Where '@odata.type' -match ($PlatformType -join '|'))
+            }
+
+
+
+            #TEST $Item = $ResourceResult[-1]
+            #TEST $Item = $ResourceResult | Where id -eq 'ca8b2b92-87fe-4a83-b0d5-1f970bae7ea4'
+            #TEST $uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/ca8b2b92-87fe-4a83-b0d5-1f970bae7ea4/assignments"
+            #TEST $uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/ae3e6923-b240-4914-ab09-76222bc926f7/assignments"
+            #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/deviceManagementScripts/d9954a7f-e264-4de7-af9c-28ce77c3fed6/assignments"
+            #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/deviceConfigurations/df48f9ac-3bdb-457e-a8f9-a9e686c6e444/assignments"
+            Foreach($Item in $ResourceResult)
+            {
+                #Determine specifics of each item type
+                Switch($Item.'@odata.type'){
+                    '#microsoft.graph.windowsUpdateForBusinessConfiguration' {$ItemType = 'Windows Update for Business'}
+                    '#microsoft.graph.windows10CustomConfiguration' {$ItemType = ($ResourceItem.Key + ' (Custom)')}
+                    '#microsoft.graph.windowsDomainJoinConfiguration' {$ItemType = ($ResourceItem.Key + ' (Hybrid Domain Join)')}
+                    '#microsoft.graph.windowsKioskConfiguration' {$ItemType = ($ResourceItem.Key + ' (Kiosk)')}
+                    #microsoft.graph.windows10EndpointProtectionConfiguration
+                    #microsoft.graph.windows10GeneralConfiguration
+                    #microsoft.graph.windowsIdentityProtectionConfiguration
+                    #microsoft.graph.windowsDefenderAdvancedThreatProtectionConfiguration
+                    #microsoft.graph.windows10NetworkBoundaryConfiguration
+                    #microsoft.graph.windows81TrustedRootCertificate
+                    #microsoft.graph.windows10DeviceFirmwareConfigurationInterface
+                    #microsoft.graph.windowsHealthMonitoringConfiguration
+                    #microsoft.graph.windows81SCEPCertificateProfile
+                    #microsoft.graph.sharedPCConfiguration
+                    #microsoft.graph.editionUpgradeConfiguration
+                    default {$ItemType = $ResourceItem.Key}
+                }
+
+                $uri = "https://graph.microsoft.com/$graphApiVersion/$($ResourceItem.Value)/$($Item.id)/assignments"
+                Try{
+                    $Assignments = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
+
+                    #TEST  $Assignment = $Assignments[0]
+                    Foreach($Assignment in $Assignments)
+                    {
+                        $AssignmentGroup = '' | Select Name,Type,Mode,Target,Platform,Group,GroupType
+                        $AssignmentGroup.Name = $Item.displayName
+                        $AssignmentGroup.Type = $ItemType
+                        $AssignmentGroup.Target = $Target
+                        $AssignmentGroup.Platform = $Platform
+
+                        If($Assignment.intent){
+                            $AssignmentGroup.Mode = (Get-Culture).TextInfo.ToTitleCase($Assignment.intent)
+                        }Else{
+                            $AssignmentGroup.Mode = 'Assigned'
+                        }
+
+                        #Grab Policyset info
+                        If($Assignment.source -eq 'policySets' -and $IncludePolicySetInherits){
+                            $PolicySet = (Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceAppManagement/policysets/$($Assignment.sourceId)" -Headers $AuthToken -Method Get).value
+                        }Else{
+                            $PolicySet = $False
+                        }
+
+                        switch($Assignment.target.'@odata.type'){
+                            '#microsoft.graph.allLicensedUsersAssignmentTarget' {
+                                $AddToGroup = $true
+                                $AssignmentGroup.Group = 'All Users'
+                                #$ResourceAssignments += $AssignmentGroup
+                                $AssignmentGroup.GroupType = 'Built-In'
+                            }
+
+                            '#microsoft.graph.allDevicesAssignmentTarget' {
+                                $AddToGroup = $true
+                                $AssignmentGroup.Group = 'All Devices'
+                                $AssignmentGroup.GroupType = 'Built-In'
+                            }
+
+                            '#microsoft.graph.exclusionGroupAssignmentTarget' {
+                                $AssignmentGroup.Mode = 'Excluded'
+                                $TargetAssignments = $Assignment.target | Where '@odata.type' -eq '#microsoft.graph.exclusionGroupAssignmentTarget'
+                                #$Group = $TargetAssignments.GroupId[-1]
+                                Foreach($Group in $TargetAssignments.GroupId)
+                                {
+                                    If($Group -in $MemberOfGroups.id){
+                                        $AddToGroup = $true
+                                        $AssignmentGroup.Group = ($MemberOfGroups | Where id -eq $Group).displayName
+                                        $AssignmentGroup.GroupType = ($MemberOfGroups | Where id -eq $Group).GroupType
+                                    }Else{
+                                        $AddToGroup = $false
+                                    }
+                                }
+                            }
+
+                            '#microsoft.graph.groupAssignmentTarget' {
+                                $TargetAssignments = $Assignment.target | Where '@odata.type' -eq '#microsoft.graph.groupAssignmentTarget'
+                                Foreach($Group in $TargetAssignments.GroupId)
+                                {
+                                    If($Group -in $MemberOfGroups.id){
+                                        $AddToGroup = $true
+                                        $AssignmentGroup.Group = ($MemberOfGroups | Where id -eq $Group).displayName
+                                        $AssignmentGroup.GroupType = ($MemberOfGroups | Where id -eq $Group).GroupType
+                                    }Else{
+                                        $AddToGroup = $false
+                                    }
+                                }
+                            }
+                            default {$AddToGroup = $false}
+                        }#end switch
+
+                        If($AddToGroup){
+                            #update assignment group columns if policy is set
+                            If($PolicySet){
+                                $AssignmentGroup.Mode = 'Applied (Inherited)'
+                                $AssignmentGroup.Group = ($AssignmentGroup.Group + ' (' + $AssignmentGroup.GroupType + ')')
+                                #$AssignmentGroup.Group = ('PolicySet: ' + $PolicySet.displayName)
+                                #$AssignmentGroup.GroupType = ($AssignmentGroup.Group + ' (Inherited)')
+                                $AssignmentGroup.GroupType = ('PolicySet: ' + $PolicySet.displayName)
+                            }
+                            $ResourceAssignments += $AssignmentGroup
+                        }
+                    }#end assignment groups
+                }
+                Catch{
+                    $ex = $_.Exception
+                    $errorResponse = $ex.Response.GetResponseStream()
+                    $reader = New-Object System.IO.StreamReader($errorResponse)
+                    $reader.BaseStream.Position = 0
+                    $reader.DiscardBufferedData()
+                    $responseBody = $reader.ReadToEnd();
+                    Write-Host "Response content:`n$responseBody" -f Red
+                    Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
+                }
+            } #end Resource assignments
+        } #end resources
+    }#end resrouceitem loop (device and users)
+
 
     <#
 
@@ -1312,7 +1371,7 @@ Function Get-IDMDeviceAssignments{
     $Assignment.AssignmentName = 'Autopilot hybrid Join profile'
     $Assignment.Type = 'Autopilot Deployment Profile'
     $Assignment.Mode = 'Assigned'
-    $Assignment.Target = 'Device'
+    $Assignment.Target = $Target
     $Assignment.Group ='SG-Autopilot-Device'
     $Assignment.GroupType = 'Dynamic'
     $Assignments += $Assignment
@@ -1323,200 +1382,3 @@ Function Get-IDMDeviceAssignments{
 }
 
 
-Function Get-IDMUserAssignments{
-    Param(
-        [ValidateSet('Windows','Android','MacOS','iOS')]
-        $Platform = 'Windows',
-        $UserId,
-        $AuthToken = $Global:AuthToken
-    )
-    #TEST $UserId = 'c9d00ac2-b07d-4477-961b-442bbc424586"'
-    $graphApiVersion = "beta"
-
-    #First get all Azure AD groups this user is a member of.
-    $Resource = "users"
-    $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)/$UserId/memberOf"
-    $UserGroups = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
-    $MemberOfGroups = $UserGroups | Select id, displayName,@{N='GroupType';E={If('DynamicMembership' -in $_.groupTypes){return 'Dynamic'}Else{return 'Static'} }}
-
-    #loop through each Intune Component, then get assignments for each
-    Switch($Platform){
-        'Windows' {
-                $PlatformType = @('microsoftStore',
-                                'win32LobApp',
-                                'windows',
-                                'officeSuiteApp',
-                                'sharedPC',
-                                'editionUpgrade',
-                                'webApp'
-                )
-
-                $Resources = @{
-                    'Compliance Policy' = 'deviceManagement/deviceCompliancePolicies'
-                    'Compliance Scripts' = 'deviceManagement/deviceComplianceScripts'
-                    'Configuration Profile' = 'deviceManagement/deviceConfigurations'
-                    'Enrollment Configuration' = 'deviceManagement/deviceEnrollmentConfigurations'
-                    'Proactive Remediation' = 'deviceManagement/deviceHealthScripts'
-                    'Powershell Scripts' = 'deviceManagement/deviceManagementScripts'
-                    'Scope Tag' = 'deviceManagement/roleScopeTags'
-                    'PolicySet' = 'deviceAppManagement/policysets'
-                    'Quality Updates' = 'deviceManagement/windowsQualityUpdateProfiles'
-                    'Feature Updates' = 'deviceManagement/windowsFeatureUpdateProfiles'
-                    'Apps' = 'deviceAppManagement/mobileApps'
-                    'WIP Policies' = 'deviceAppManagement/windowsInformationProtectionPolicies'
-                    'MDM WIP Policies' = 'deviceAppManagement/mdmWindowsInformationProtectionPolicies'
-                }
-        }
-
-        'Android' {$PlatformType = @('android',
-                                    'webApp',
-                                    'aosp'
-                                    )
-        }
-
-        'MacOS'   {$PlatformType = @('IOS',
-                                    'macOS',
-                                    'webApp'
-                                    )
-        }
-
-        'iOS'     {$PlatformType = @('ios',
-                                    'webApp'
-                                    )
-        }
-    }
-
-
-    $ResourceAssignments = @()
-    #TEST $ResourceItem = $Resources.GetEnumerator()[0]
-    #TEST $uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps"
-    #TEST $uri = "https://graph.microsoft.com/beta/deviceManagement/deviceManagementScripts"
-    Foreach($ResourceItem in $Resources.GetEnumerator()){
-        $uri = "https://graph.microsoft.com/$graphApiVersion/$($ResourceItem.Value)"
-        $ResourceResult = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
-        #Filter on Platform if it exists
-        If($ResourceResult.'@odata.type'){
-            $ResourceResult = ($ResourceResult | Where '@odata.type' -match ($PlatformType -join '|'))
-        }
-
-        #TEST $Item = $ResourceResult[-1]
-        Foreach($Item in $ResourceResult){
-            #$uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/7b7f28d8-a347-441c-8b93-6ea0f896cab0/assignments"
-            #$uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/7f6fa0d2-c4ca-4ee6-8275-1ff2b00912ff/assignments"
-
-            $uri = "https://graph.microsoft.com/$graphApiVersion/$($ResourceItem.Value)/$($Item.id)/assignments"
-            Try{
-                $Assignments = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get).value
-                Foreach($Assignment in $Assignments)
-                {
-                    $AssignmentsGroup = '' | Select Name,Type,Mode,Target,Platform,Group,GroupType
-                    $AssignmentsGroup.Name = $Item.displayName
-                    $AssignmentsGroup.Type = $ResourceItem.Key
-                    $AssignmentsGroup.Mode = $Assignments.intent
-                    $AssignmentsGroup.Target = 'User'
-                    $AssignmentsGroup.Platform = $Platform
-
-                    switch($Assignments.target.'@odata.type'){
-                        '#microsoft.graph.allLicensedUsersAssignmentTarget' {
-                            $AddToGroup = $true
-                            $AssignmentsGroup.Mode = 'Assigned'
-                            $AssignmentsGroup.Group = 'All Users'
-                            $AssignmentsGroup.GroupType = 'Built-In'
-                            #$ResourceAssignments += $AssignmentsGroup
-                        }
-
-                        '#microsoft.graph.exclusionGroupAssignmentTarget' {
-                            $AssignmentsGroup.Mode = 'Excluded'
-                            $TargetAssignments = $Assignment.target | Where '@odata.type' -eq '#microsoft.graph.exclusionGroupAssignmentTarget'
-                            Foreach($Group in $TargetAssignments.GroupId)
-                            {
-                                If($Group -in $MemberOfGroups.id){
-                                    $AddToGroup = $true
-                                    $AssignmentsGroup.Group = ($MemberOfGroups | Where id -eq $Group).displayName
-                                    $AssignmentsGroup.GroupType = ($MemberOfGroups | Where id -eq $Group).GroupType
-                                    #$ResourceAssignments += $AssignmentsGroup
-                                }Else{
-                                    $AddToGroup = $false
-                                }
-                            }
-                        }
-
-                        '#microsoft.graph.groupAssignmentTarget' {
-                            $AssignmentsGroup.Mode = 'Assigned'
-                            $TargetAssignments = $Assignment.target | Where '@odata.type' -eq '#microsoft.graph.groupAssignmentTarget'
-                            Foreach($Group in $TargetAssignments.GroupId)
-                            {
-                                If($Group -in $MemberOfGroups.id){
-                                    $AddToGroup = $true
-                                    $AssignmentsGroup.Group = ($MemberOfGroups | Where id -eq $Group).displayName
-                                    $AssignmentsGroup.GroupType = ($MemberOfGroups | Where id -eq $Group).GroupType
-                                    #$ResourceAssignments += $AssignmentsGroup
-                                }Else{
-                                    $AddToGroup = $false
-                                }
-                            }
-                        }
-                        default {$AddToGroup = $false}
-                    }
-
-                    If($AddToGroup){
-                        $ResourceAssignments += $AssignmentsGroup
-                    }
-                }
-
-                <#
-                $Assignments | Where {$_.target.'@odata.type' -eq '#microsoft.graph.allLicensedUsersAssignmentTarget'} | %{
-                    $AssignmentsGroup.Mode = $_.intent
-                    $AssignmentsGroup.Group = 'All Users'
-                    $AssignmentsGroup.GroupType = 'Built-In'
-                    $ResourceAssignments += $AssignmentsGroup
-                }
-
-                #TEST $Group = $Assignments.groupid[0]
-                Foreach($Group in $Assignments.target)
-                {
-                    switch($Group.'@odata.type'){
-                        "#microsoft.graph.exclusionGroupAssignmentTarget" {$AssignmentsGroup.Mode = 'Excluded'}
-                        "#microsoft.graph.groupAssignmentTarget" {If([string]::IsNullOrEmpty($Assignments.intent)){$AssignmentsGroup.Mode = 'Assigned'}}
-                        default {If([string]::IsNullOrEmpty($Assignments.intent)){$AssignmentsGroup.Mode = 'Assigned'}}
-                    }
-
-                    If($Group.groupid -in $MemberOfGroups.id){
-                        $AssignmentsGroup.Group = ($MemberOfGroups | Where id -eq $Group.groupid).displayName
-                        $AssignmentsGroup.GroupType = ($MemberOfGroups | Where id -eq $Group.groupid).GroupType
-                        $ResourceAssignments += $AssignmentsGroup
-                    }
-                }
-                #>
-
-            }
-            Catch{
-                $ex = $_.Exception
-                $errorResponse = $ex.Response.GetResponseStream()
-                $reader = New-Object System.IO.StreamReader($errorResponse)
-                $reader.BaseStream.Position = 0
-                $reader.DiscardBufferedData()
-                $responseBody = $reader.ReadToEnd();
-                Write-Host "Response content:`n$responseBody" -f Red
-                Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
-            }
-        }
-    }
-
-
-
-    <#
-    #SAMPLE DATA
-    $Assignments = @()
-    $Assignment = "" | Select UPN,AssignmentName,Type,Mode,Target,Group,GroupType
-    $Assignment.UPN = $User
-    $Assignment.AssignmentName = 'Company Portal'
-    $Assignment.Type = 'Application'
-    $Assignment.Mode = 'Installed'
-    $Assignment.Target = 'User'
-    $Assignment.Group ='All Users'
-    $Assignment.GroupType = 'Built-in'
-    $Assignments += $Assignment
-    #>
-    return $ResourceAssignments
-}

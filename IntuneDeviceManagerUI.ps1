@@ -13,43 +13,62 @@ MODULES REQUIRED:
     AzureAD
     WindowsAutoPilotIntune
 #>
-[cmdletbinding(DefaultParameterSetName='UPN')]
+[cmdletbinding(DefaultParameterSetName='UserConnected')]
 param(
-    [hashtable]$Rules = @{RuleRegex1 = '^.{0,3}';RuleRegex2 ='.{0,3}[\s+]'},
+    [Parameter(Mandatory=$false,ParameterSetName='UserConnected')]
+    [Parameter(Mandatory=$false,ParameterSetName='AppConnected')]
     [ValidateSet('Windows','Android','MacOS','iOS')]
     [string]$DevicePlatform = 'Windows',
-    [ValidateSet('Hybrid','Azure','Registered','Domain')]
-    [string]$FilterJoinType = 'Hybrid',
-    [string]$SearchFilter = '*',
-    [ValidateSet('No Abbr','Chassis','Manufacturer','Model')]
-    [string]$AbbrType = 'Chassis',
-    [string]$AbbrKey = 'Laptop=A, Notebook=A, Tablet=A, Desktop=W, Tower=W, Virtual Machine=W',
-    [string]$Prefix,
-    [ValidateSet(0,1,2,3,4,5)]
-    [int]$AppendDigits = 3,
 
-    [Parameter(Mandatory=$false,ParameterSetName='UPN')]
-    [Parameter(Mandatory=$false,ParameterSetName='CM')]
-    [Parameter(Mandatory=$false,ParameterSetName='CMwithApp')]
+    [Parameter(Mandatory=$false,ParameterSetName='UserConnected')]
+    [Parameter(Mandatory=$false,ParameterSetName='AppConnected')]
+    [string]$DevicePrefix,
+
+    [Parameter(Mandatory=$false,ParameterSetName='UserConnected')]
+    [Parameter(Mandatory=$false,ParameterSetName='AppConnected')]
+    [switch]$RenameEnablement,
+
+    [Parameter(Mandatory=$false,ParameterSetName='UserConnected')]
+    [Parameter(Mandatory=$false,ParameterSetName='AppConnected')]
+    [hashtable]$RenameRules = @{RuleRegex1 = '^.{0,3}';RuleRegex2 ='.{0,3}[\s+]'},
+
+    [Parameter(Mandatory=$false,ParameterSetName='UserConnected')]
+    [Parameter(Mandatory=$false,ParameterSetName='AppConnected')]
+    [ValidateSet('No Abbr','Chassis','Manufacturer','Model')]
+    [string]$RenameAbbrType = 'Chassis',
+
+    [Parameter(Mandatory=$false,ParameterSetName='UserConnected')]
+    [Parameter(Mandatory=$false,ParameterSetName='AppConnected')]
+    [string]$RenameAbbrKey = 'Laptop=A, Notebook=A, Tablet=A, Desktop=W, Tower=W, Virtual Machine=W',
+
+    [Parameter(Mandatory=$false,ParameterSetName='UserConnected')]
+    [Parameter(Mandatory=$false,ParameterSetName='AppConnected')]
+    [string]$RenamePrefix,
+
+    [Parameter(Mandatory=$false,ParameterSetName='UserConnected')]
+    [Parameter(Mandatory=$false,ParameterSetName='AppConnected')]
+    [ValidateSet(0,1,2,3,4,5)]
+    [int]$RenameAppendDigits = 3,
+
+    [Parameter(Mandatory=$false,ParameterSetName='UserConnected')]
+    [Parameter(Mandatory=$false,ParameterSetName='AppConnected')]
+    [string]$RenameSearchFilter = '*',
+
+    [Parameter(Mandatory=$false,ParameterSetName='UserConnected')]
+    [Parameter(Mandatory=$false,ParameterSetName='AppConnected')]
     [string]$CMSiteCode,
 
-    [Parameter(Mandatory=$false,ParameterSetName='UPN')]
-    [Parameter(Mandatory=$true,ParameterSetName='CM')]
-    [Parameter(Mandatory=$true,ParameterSetName='CMwithApp')]
+    [Parameter(Mandatory=$false,ParameterSetName='UserConnected')]
+    [Parameter(Mandatory=$false,ParameterSetName='AppConnected')]
     [string]$CMSiteServer,
 
-    [Parameter(Mandatory=$false,ParameterSetName='App')]
-    [Parameter(Mandatory=$true,ParameterSetName='CMwithApp')]
+    [Parameter(Mandatory=$false,ParameterSetName='AppConnected')]
     [switch]$AppConnect,
 
-    [Parameter(Mandatory=$false,ParameterSetName='UPN')]
-    [Parameter(Mandatory=$true,ParameterSetName='App')]
-    [Parameter(Mandatory=$true,ParameterSetName='CMwithApp')]
+    [Parameter(Mandatory=$true,ParameterSetName='AppConnected')]
     [string]$ApplicationId,
 
-    [Parameter(Mandatory=$false,ParameterSetName='UPN')]
-    [Parameter(Mandatory=$true,ParameterSetName='App')]
-    [Parameter(Mandatory=$true,ParameterSetName='CMwithApp')]
+    [Parameter(Mandatory=$true,ParameterSetName='AppConnected')]
     [string]$TenantId
 )
 #*=============================================
@@ -125,7 +144,6 @@ Function Get-ScriptPath {
 # Use function to get paths because Powershell ISE & other editors have different results
 [string]$scriptPath = Get-ScriptPath
 [string]$scriptName = [IO.Path]::GetFileNameWithoutExtension($scriptPath)
-[string]$scriptFileName = Split-Path -Path $scriptPath -Leaf
 [string]$scriptRoot = Split-Path -Path $scriptPath -Parent
 [string]$FunctionPath = Join-Path -Path $scriptRoot -ChildPath 'Functions'
 [string]$ResourcePath = Join-Path -Path $scriptRoot -ChildPath 'Resources'
@@ -135,6 +153,7 @@ Function Get-ScriptPath {
 ##* External Functions
 ##*=============================================
 . "$FunctionPath\Environment.ps1"
+
 #parse changelog for version for a more accurate version
 $ChangeLogPath = Resolve-ActualPath -FileName 'CHANGELOG.md' -WorkingPath $scriptRoot -ErrorAction SilentlyContinue
 If($ChangeLogPath){
@@ -149,14 +168,15 @@ $ModulesNeeded = @('Az.Accounts','Microsoft.Graph.Intune','Microsoft.Graph.Authe
 
 $ParamProps = @{
     Name = $scriptName
-    Rules = $Rules
     DevicePlatform = $DevicePlatform
-    FilterJoinType = $FilterJoinType
+    DevicePrefix = $DevicePrefix
+    Rules = $RenameRules
+    AllowRename = $RenameEnablement
     SearchFilter = $SearchFilter
-    AbbrType = $AbbrType
-    AbbrKey = $AbbrKey
-    Prefix = $Prefix
-    AppendDigits = $AppendDigits
+    AbbrType = $RenameAbbrType
+    AbbrKey = $RenameAbbrKey
+    Prefix = $RenamePrefix
+    AppendDigits = $RenameAppendDigits
     CMSiteCode = $CMSiteCode
     CMSiteServer = $CMSiteServer
     AppConnect = $AppConnect
@@ -197,6 +217,7 @@ Function Show-IDMWindow
     $syncHash.XamlFile = $XamlFile
     $syncHash.Properties = $Properties
     $syncHash.Data = @{}
+    $syncHash.GraphData = @{}
     $IDMRunSpace.ApartmentState = "STA"
     $IDMRunSpace.ThreadOptions = "ReuseThread"
     $IDMRunSpace.Open() | Out-Null
@@ -240,22 +261,32 @@ Function Show-IDMWindow
         . "$FunctionPath\DeviceInfo.ps1"
         . "$FunctionPath\MSgraph.ps1"
         . "$FunctionPath\Intune.ps1"
+        . "$FunctionPath\Runspace.ps1"
         . "$FunctionPath\Autopilot.ps1"
         . "$FunctionPath\UIControls.ps1"
         # INNER  FUNCTIONS
         #=================================
         If(Test-IsISE){
             $Windowcode = '[DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);'
-            $asyncWindow = Add-Type -MemberDefinition $Windowcode -name Win32ShowWindowAsync -namespace Win32Functions -PassThru
+            $asyncWindow = Add-Type -MemberDefinition $Windowcode -name Win32ShowWindowAsync -namespace Win32Functions
             $null = $asyncWindow::ShowWindowAsync((Get-Process -PID $pid).MainWindowHandle, 0)
         }
         #Closes UI objects and exits (within runspace)
+
         Function Close-IDMWindow
         {
             if ($syncHash.hadCritError) { Write-Host -Message "Background thread had a critical error" -ForegroundColor red }
             #if runspace has not errored Dispose the UI
             if (!($syncHash.isClosing)) { $syncHash.Window.Close() | Out-Null }
         }
+
+        #add elements that you want to update often
+        #the value must also be added to top of function as synchash property
+        #then it can be called by the timer to update
+        $updateDevices = {
+
+        }
+
         # Start populating menu content
         #=================================
         $syncHash.txtVersion.Text = $Synchash.Properties.Version
@@ -265,9 +296,9 @@ Function Show-IDMWindow
             $ModuleInstalled = Get-Module -Name $Module -ListAvailable
             If($null -eq $ModuleInstalled){
                 $syncHash.Data.MissingModules += $Module
-                Write-UIOutput -UIObject $syncHash.Logging -Message ("Module required: {0}" -f $Module) -Type Error -Passthru
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Module required: {0}" -f $Module) -Type Error
             }Else{
-                Write-UIOutput -UIObject $syncHash.Logging -Message ("Module is installed: {0}" -f $Module) -Type Info -Passthru
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Module is installed: {0}" -f $Module) -Type Info
             }
         }
         #if required modules not installed display UI correctly
@@ -401,20 +432,20 @@ Function Show-IDMWindow
         If(Test-IsDomainJoined){
             $syncHash.txtDomainDevice.text = 'Yes'
             $syncHash.txtDomainDevice.Foreground = 'Green'
-            Write-UIOutput -UIObject $syncHash.Logging -Message ("Device running this is joined to the domain: {0}" -f (Test-IsDomainJoined -Passthru)) -Type Info -Passthru
+            Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Device running this is joined to the domain: {0}" -f (Test-IsDomainJoined -Passthru)) -Type Info
         }Else{
             $syncHash.txtDomainDevice.text = 'No'
             $syncHash.btnADUserSync.IsEnabled = $false
-            Write-UIOutput -UIObject $syncHash.Logging -Message ("Device running this script must be joined to the domain to view AD objects") -Type Error -Passthru
+            Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Device running this script must be joined to the domain to view AD objects") -Type Error
         }
         # check if RSAT PowerShell Module is installed
         If(Test-RSATModule){
             $syncHash.txtRSAT.text = 'Yes';$syncHash.txtRSAT.Foreground = 'Green'
-            Write-UIOutput -UIObject $syncHash.Logging -Message ("RSAT PowerShell module is installed: {0}" -f (Test-RSATModule -Passthru)) -Type Info -Passthru:ADUser
+            Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("RSAT PowerShell module is installed: {0}" -f (Test-RSATModule -Passthru)) -Type Info
             $syncHash.btnADUserSync.IsEnabled = $true
         }
         Else{
-            Write-UIOutput -UIObject $syncHash.Logging -Message ("RSAT PowerShell module must be installed to be able to query AD device names") -Type Error -Passthru
+            Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("RSAT PowerShell module must be installed to be able to query AD device names") -Type Error
             $syncHash.txtRSAT.text = 'No'
             $syncHash.btnADUserSync.IsEnabled = $false
         }
@@ -426,17 +457,17 @@ Function Show-IDMWindow
         {
             If(Test-CMModule -CMSite $syncHash.txtCMSiteCode.text -CMSiteServer $syncHash.txtCMSiteServer.text){
                 $syncHash.txtRSA.text = 'Yes';$syncHash.txtRSAT.Foreground = 'Green'
-                Write-UIOutput -UIObject $syncHash.Logging -Message ("Configuration Manager PowerShell module is installed: {0}" -f (Test-CMModule -CMSite $syncHash.txtCMSiteCode.text -CMSite $syncHash.txtCMSiteServer.text -Passthru)) -Type Info -Passthru
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Configuration Manager PowerShell module is installed: {0}" -f (Test-CMModule -CMSite $syncHash.txtCMSiteCode.text -CMSite $syncHash.txtCMSiteServer.text -Passthru)) -Type Info
                 $syncHash.btnCMSiteSync.IsEnabled = $true
             }
             Else{
-                Write-UIOutput -UIObject $syncHash.Logging -Message ("Configuration Manager PowerShell module must be installed to be able to query CM device names") -Type Error -Passthru
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Configuration Manager PowerShell module must be installed to be able to query CM device names") -Type Error
                 $syncHash.txtRSAT.text = 'No'
                 $syncHash.btnCMSiteSync.IsEnabled = $False
             }
         }
         Else{
-            Write-UIOutput -UIObject $syncHash.Logging -Message ("Configuration Manager settings are not configured, configure them to use the CM feature") -Type Warning -Passthru
+            Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Configuration Manager settings are not configured, configure them to use the CM feature") -Type Warning
             $syncHash.btnCMSiteSync.IsEnabled = $False
         }
 
@@ -447,9 +478,9 @@ Function Show-IDMWindow
         $syncHash.txtPSVersion.Text = $PSVersion.ToString()
         IF($envPSVersion.Major -ge 5 -and $envPSVersion.Minor -ge 1){
             $syncHash.txtPSVersion.Foreground = 'Green'
-            Write-UIOutput -UIObject $syncHash.Logging -Message ("PowerShell version is: {0}" -f $PSVersion.ToString()) -Type Info -Passthru
+            Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("PowerShell version is: {0}" -f $PSVersion.ToString()) -Type Info
         }Else{
-            Write-UIOutput -UIObject $syncHash.Logging -Message ("PowerShell must be must be at version 5.1 to work properly") -Type Error -Passthru
+            Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("PowerShell must be must be at version 5.1 to work properly") -Type Error
             $syncHash.btnMSGraphConnect.IsEnabled = $false
             $syncHash.btnNewDeviceName.IsEnabled = $false
         }
@@ -459,8 +490,11 @@ Function Show-IDMWindow
         #----------------------
         @('User Root OU','Computers Root OU','Computers Default OU','Custom') | %{$syncHash.cmbSearchInOptions.Items.Add($_) | Out-Null}
         $syncHash.cmbSearchInOptions.SelectedItem = 'User Root OU'
+
         $syncHash.txtSearchFilter.text = $syncHash.Properties.SearchFilter
+
         @('User OU Name','User Name','User Display Name','Device Name','Device SerialNumber','Device AssetTag','Random') | %{$syncHash.cmbQueryRule.Items.Add($_) | Out-Null}
+
         $syncHash.cmbQueryRule.SelectedItem = 'User OU Name'
         @('SerialNumber','MacAddress','LastLoggedOnUser','AssetTag') | %{$syncHash.cmbCMSiteAttribute.Items.Add($_) | Out-Null}
         $syncHash.cmbCMSiteAttribute.SelectedItem = 'SerialNumber'
@@ -553,6 +587,16 @@ Function Show-IDMWindow
                     $syncHash.txtSearchIntuneDevices.Text = 'Search...'
                 }
                 Else{
+                }
+            }
+        )
+
+        #ACTIVATE LIVE SEARCH
+        $syncHash.txtSearchIntuneDevices.AddHandler(
+            [System.Windows.Controls.Primitives.TextBoxBase]::TextChangedEvent,
+            [System.Windows.RoutedEventHandler]{
+                If(-not([string]::IsNullOrEmpty($syncHash.txtSearchIntuneDevices.Text)) -and ($syncHash.txtSearchIntuneDevices.Text -ne 'Search...')){
+                    Search-UIDeviceList -ItemsList $syncHash.Data.IntuneDevices -ListObject $syncHash.listIntuneDevices -Identifier 'deviceName' -filter $syncHash.txtSearchIntuneDevices.Text
                 }
             }
         )
@@ -739,14 +783,14 @@ Function Show-IDMWindow
                 Connect-MSGraphApp @AppConnectionDetails
                 $syncHash.Data.AuthToken = Connect-MSGraphAsAnApp @AppConnectionDetails
                 $syncHash.Data.ConnectedUPN = $syncHash.Properties.ApplicationId
-                Write-UIOutput -UIObject $syncHash.Logging -Message ("Connected to MSGraph using appid: {0}" -f $syncHash.Properties.ApplicationId) -Type Start -Passthru
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Connected to MSGraph using appid: {0}" -f $syncHash.Properties.ApplicationId) -Type Start
             }
             Else{
                 #minimize the UI to allow for login
                 $syncHash.Window.WindowState = 'Minimized'
                 $syncHash.Data.ConnectedUPN = (Connect-MSGraph -AdminConsent).UPN
                 $syncHash.Data.AuthToken = (Get-MSGraphAuthToken -User $syncHash.Data.ConnectedUPN)
-                Write-UIOutput -UIObject $syncHash.Logging -Message ("Connected to MSGraph using account: {0}" -f $syncHash.Data.ConnectedUPN) -Type Start -Passthru
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Connected to MSGraph using account: {0}" -f $syncHash.Data.ConnectedUPN) -Type Start
             }
 
             #globalize token for function usage
@@ -756,7 +800,7 @@ Function Show-IDMWindow
 
 
             If($null -ne $syncHash.Data.ConnectedUPN){
-                Write-UIOutput -UIObject $syncHash.Logging -Message ("Successfully connected to Azure AD with Auth Token: {0}" -f ($syncHash.Data.AuthToken.Authorization).replace('Bearer','').Trim()) -Type Start -Passthru
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Successfully connected to Azure AD with Auth Token: {0}" -f ($syncHash.Data.AuthToken.Authorization).replace('Bearer','').Trim()) -Type Start
                 $syncHash.txtMSGraphConnected.Text = 'Yes'
                 $syncHash.txtMSGraphConnected.Foreground = 'Green'
                 $syncHash.btnRefreshList.IsEnabled = $true
@@ -767,54 +811,48 @@ Function Show-IDMWindow
             $syncHash.Window.Topmost = $true
             If($null -ne $syncHash.Data.AuthToken)
             {
-                Update-IDMProgress -Runspace $synchash -StatusMsg ('Searching for managed [{0}] devices...' -f $syncHash.properties.DevicePlatform) -Indeterminate
+                #Update-IDMProgress -Runspace $synchash -StatusMsg ('Searching for managed [{0}] devices...' -f $syncHash.properties.DevicePlatform) -Indeterminate
+
 
                 #grab all managed devices
-                $syncHash.Window.Dispatcher.Invoke("Normal",[action]{
+                #$syncHash.Window.Dispatcher.Invoke("Normal",[action]{
+                    #populate Autopilot profiles
+                    Add-UIList -Runspace $syncHash -ItemsList (Get-AutopilotProfile) -DropdownObject $syncHash.cmbAPProfile -Identifier 'displayName'
+                    #populate device category
+                    Add-UIList -Runspace $syncHash -ItemsList (Get-IDMDeviceCategory) -DropdownObject $syncHash.cmbDeviceCategoryList -Identifier 'displayName'
+
+                    #build device query
                     $DeviceParams = @{AuthToken=$syncHash.Data.AuthToken;IncludeEAS=$true}
                     If($syncHash.Properties.DevicePlatform){
                         $DeviceParams += @{Platform=$syncHash.Properties.DevicePlatform}
                     }
-                    <#
-                    If($syncHash.Properties.FilterJoinType){
-                        $DeviceParams += @{FilterJoinType=$syncHash.Properties.FilterJoinType}
+                    If($syncHash.Properties.DevicePrefix){
+                        $DeviceParams += @{Filter=$syncHash.Properties.DevicePrefix}
                     }
-                    #>
-                    #populate Autopilot profiles
-                    Add-UIList -ItemsList (Get-AutopilotProfile) -DropdownObject $syncHash.cmbAPProfile -Identifier 'displayName'
-                    #populate device category
-                    Add-UIList -ItemsList (Get-IDMDeviceCategory) -DropdownObject $syncHash.cmbDeviceCategoryList -Identifier 'displayName'
-
                     #encapsulate device in array (incase there is only 1)
-                    $syncHash.Data.IntuneDevices = @(Get-IDMDevices @DeviceParams -Expand)
+                    #$syncHash.Data.IntuneDevices = @(Get-IDMDevice @DeviceParams -Expand)
+                    #$syncHash.Data.IntuneDevices = @()
+                    #$syncHash.Data.IntuneDevices += Get-IDMDeviceInRunspace -Runspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
+                    Get-IDMDeviceInRunspace -Runspace $syncHash -ParentRunspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
+
                     If($syncHash.Data.IntuneDevices.count -gt 0)
                     {
                         $syncHash.tabDetails.Visibility = 'Visible'
-                        $syncHash.tabRenamer.Visibility = 'Visible'
+                        If($syncHash.Properties.AllowRename -eq $true){$syncHash.tabRenamer.Visibility = 'Visible'}
 
                         $syncHash.btnRefreshList.IsEnabled = $true
                         $syncHash.btnNewDeviceName.IsEnabled =$true
 
-                        Update-IDMProgress -Runspace $synchash -StatusMsg ('Found {0} devices the meet platform requirement [{1}]' -f $syncHash.Data.IntuneDevices.count,$syncHash.properties.DevicePlatform) -PercentComplete 100
-                        Add-UIList -ItemsList $syncHash.Data.IntuneDevices -ListObject $syncHash.listIntuneDevices -Identifier 'deviceName'
-
-                        #ACTIVATE LIVE SEARCH
-                        $syncHash.txtSearchIntuneDevices.AddHandler(
-                            [System.Windows.Controls.Primitives.TextBoxBase]::TextChangedEvent,
-                            [System.Windows.RoutedEventHandler]{
-                                If(-not([string]::IsNullOrEmpty($syncHash.txtSearchIntuneDevices.Text)) -and ($syncHash.txtSearchIntuneDevices.Text -ne 'Search...')){
-                                    Search-UIDeviceList -ItemsList $syncHash.Data.IntuneDevices -ListObject $syncHash.listIntuneDevices -Identifier 'deviceName' -filter $syncHash.txtSearchIntuneDevices.Text
-                                }
-                            }
-                        )
+                        #Add-UIList -ItemsList $syncHash.Data.IntuneDevices -ListObject $syncHash.listIntuneDevices -Identifier 'deviceName'
+                        #Add-UIList -Runspace $syncHash -ItemsList $syncHash.Data.IntuneDevices -ListObject $syncHash.listIntuneDevices -Identifier 'deviceName'
                     }
                     Else{
                         $syncHash.btnRefreshList.IsEnabled = $false
                         $syncHash.btnNewDeviceName.IsEnabled = $false
                         Update-IDMProgress -Runspace $synchash -StatusMsg ('No devices found') -PercentComplete 100 -Color 'Red'
-                        Write-UIOutput -UIObject $syncHash.Logging -Message ("No devices found. Log into a different Azure tenant or credentials to retrieve registered devices") -Type Error -Passthru
+                        Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("No devices found. Log into a different Azure tenant or credentials to retrieve registered devices") -Type Error
                     }
-                })
+                #})
 
             }
         })
@@ -849,13 +887,13 @@ Function Show-IDMWindow
                                     $syncHash.txtStatus.Foreground = 'Green'
                                 }
                                 Catch{
-                                    Write-UIOutput -UIObject $syncHash.Logging -Message ("Failed to get AD object [{1}]. Error: {0}" -f $_.Exception.Message,$syncHash.listIntuneDevices.SelectedItem) -Type Error -Passthru
+                                    Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Failed to get AD object [{1}]. Error: {0}" -f $_.Exception.Message,$syncHash.listIntuneDevices.SelectedItem) -Type Error
                                     $syncHash.txtStatus.Text = 'Failed to retrieve AD object. Please see log for more details'
                                     $syncHash.txtStatus.Foreground = 'Red'
                                 }
                             }
                             Else {
-                                Write-UIOutput -UIObject $syncHash.Logging -Message ("This device must be joined to the domain and have RSAT installed to query AD computer object [{0}]" -f $syncHash.listIntuneDevices.SelectedItem) -Type Warning -Passthru
+                                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("This device must be joined to the domain and have RSAT installed to query AD computer object [{0}]" -f $syncHash.listIntuneDevices.SelectedItem) -Type Warning
                                 $syncHash.txtStatus.Text = ("This device must be joined to the domain and have RSAT installed to query AD computer object [{0}]" -f $syncHash.listIntuneDevices.SelectedItem)
                                 $syncHash.txtStatus.Foreground = 'Orange'
                             }
@@ -863,36 +901,48 @@ Function Show-IDMWindow
                     }
                     'azureADJoined' {
                         $syncHash.txtDeviceJoinType.Text = "Azure AD Joined"
-                        Write-UIOutput -UIObject $syncHash.Logging -Message ("On-prem AD options are not available for Azure AD joined devices [{0}]" -f $syncHash.listIntuneDevices.SelectedItem) -Type Warning -Passthru
+                        Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("On-prem AD options are not available for Azure AD joined devices [{0}]" -f $syncHash.listIntuneDevices.SelectedItem) -Type Warning
                         #$syncHash.txtStatus.Foreground = 'Orange'
                         #(Get-UIProperty -HashName $syncHash "ADComputer" -Wildcard) | Set-UIElement -Enable:$false -ErrorAction SilentlyContinue
                     }
                     'azureADRegistered' {
                         $syncHash.txtDeviceJoinType.Text = "Azure AD Registered"
-                        Write-UIOutput -UIObject $syncHash.Logging -Message ("Limited options are available for Azure AD registered device [{0}]" -f $syncHash.listIntuneDevices.SelectedItem) -Type Warning -Passthru
+                        Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Limited options are available for Azure AD registered device [{0}]" -f $syncHash.listIntuneDevices.SelectedItem) -Type Warning
                         #(Get-UIProperty -HashName $syncHash "ADComputer" -Wildcard) | Set-UIElement -Enable:$false -ErrorAction SilentlyContinue
                     }
                 }
                 #check if system running device is joined to the domain and has RSAT tools installed
                 $DeviceAsString = $syncHash.Data.SelectedDevice | Select deviceName,osVersion,manufacturer,model,serialNumber,joinType,deviceEnrollmentType,userDisplayName,userPrincipalName | Out-String
-                Write-UIOutput -UIObject $syncHash.Logging -Message ("Selected device:`n{0}" -f $DeviceAsString) -Passthru
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Selected device:`n{0}" -f $DeviceAsString)
+
                 $syncHash.txtDeviceIntuneId.Text = $syncHash.Data.SelectedDevice.id
                 $syncHash.txtDeviceAzureId.Text = $syncHash.Data.SelectedDevice.azureADDeviceId
                 $syncHash.txtDeviceAzureObjectId.Text = $syncHash.Data.SelectedDevice.azureADObjectId
                 $syncHash.txtDeviceSerial.Text = $syncHash.Data.SelectedDevice.serialNumber
-                $syncHash.chkDeviceComplianceStatus.IsChecked = $syncHash.Data.SelectedDevice.isCompliant
+                If($syncHash.Data.SelectedDevice.isCompliant){
+                    $syncHash.lblDeviceComplianceStatus.Foreground = 'Black'
+                    $syncHash.chkDeviceComplianceStatus.IsChecked = $true
+                }Else{
+                    $syncHash.lblDeviceComplianceStatus.Foreground = 'Gray'
+                    $syncHash.chkDeviceComplianceStatus.IsChecked = $false
+                }
+
 
                 #Detemine if device is co-managed
                 If($syncHash.Data.SelectedDevice.deviceEnrollmentType -eq 'windowsCoManagement'){
+                    $syncHash.lblDeviceCoManagedStatus.Foreground = 'Black'
                     $syncHash.chkDeviceCoManagedStatus.IsChecked = $true
                 }Else{
+                    $syncHash.lblDeviceCoManagedStatus.Foreground = 'Gray'
                     $syncHash.chkDeviceCoManagedStatus.IsChecked = $false
                 }
 
                  #Detemine if device is an AVD host
                  If($syncHash.Data.SelectedDevice.skuFamily -eq 'EnterpriseMultisession'){
+                    $syncHash.lblDeviceMultiSession.Foreground = 'Black'
                     $syncHash.chkDeviceMultiSession.IsChecked = $true
                 }Else{
+                    $syncHash.lblDeviceMultiSession.Foreground = 'Gray'
                     $syncHash.chkDeviceMultiSession.IsChecked = $false
                 }
 
@@ -904,11 +954,13 @@ Function Show-IDMWindow
 
                 #determine if device Autopilot ready...meaning its hardware id has been uploaded with Autopilot devices
                 If($syncHash.Data.AutopilotDevice){
+                    $syncHash.lblDeviceAutopilotReadyStatus.Foreground = 'Black'
                     $syncHash.chkDeviceAutopilotReadyStatus.IsChecked = $true
                     #update autopilot group tag
                     $syncHash.txtAPProfileGroupTag.text = $syncHash.Data.AutopilotDevice.groupTag
                     $syncHash.cmbAPProfile.SelectedItem = $syncHash.Data.AutopilotDevice.deploymentProfile.displayName
                 }Else{
+                    $syncHash.lblDeviceAutopilotReadyStatus.Foreground = 'Gray'
                     $syncHash.chkDeviceAutopilotReadyStatus.IsChecked = $false
                     $syncHash.txtAPProfileGroupTag.text = $Null
                     $syncHash.cmbAPProfile.SelectedItem = $Null
@@ -917,8 +969,10 @@ Function Show-IDMWindow
 
                 #determine if device has been autopiloted (look for ZTDID and profile type). Is there a better way???
                 If($syncHash.Data.SelectedDevice.physicalIds -match '\[ZTDID\]' -and $syncHash.Data.SelectedDevice.profileType -ne 'RegisteredDevice'){
+                    $syncHash.lblDeviceAutopilotedStatus.Foreground = 'Black'
                     $syncHash.chkDeviceAutopilotedStatus.IsChecked = $true
                 }Else{
+                    $syncHash.lblDeviceAutopilotedStatus.Foreground = 'Gray'
                     $syncHash.chkDeviceAutopilotedStatus.IsChecked = $false
                 }
 
@@ -935,6 +989,7 @@ Function Show-IDMWindow
                 }
 
                 If($syncHash.Data.AssignedUser.onPremisesSyncEnabled -eq $True){
+                    $syncHash.lblAssignedUserADSyncd.Foreground = 'Black'
                     $syncHash.chkAssignedUserADSyncd.IsChecked = $true
                     $syncHash.txtAssignedUserDN.text = $syncHash.Data.AssignedUser.onPremisesDistinguishedName
                     $syncHash.lblAssignedUserDN.Visibility = 'Visible'
@@ -950,11 +1005,13 @@ Function Show-IDMWindow
                     $syncHash.txtADUserDN.text = $syncHash.Data.AssignedUser.onPremisesDistinguishedName
                 }
                 Else{
+                    $syncHash.lblAssignedUserADSyncd.Foreground = 'Gray'
                     $syncHash.chkAssignedUserADSyncd.IsChecked = $false
                     $syncHash.txtAssignedUserDN.text = ''
                     $syncHash.lblAssignedUserDN.Visibility = 'Hidden'
                     $syncHash.txtAssignedUserDN.Visibility = 'Hidden'
                     $syncHash.Data.ADUser = $Null
+                    $syncHash.txtADUserDN.text = ''
                 }
                 (Get-UIProperty -HashName $syncHash "ADUser" -Wildcard) | Set-UIElement -Enable:($syncHash.Data.AssignedUser.onPremisesSyncEnabled -eq $True) -ErrorAction SilentlyContinue
 
@@ -977,19 +1034,52 @@ Function Show-IDMWindow
         # Refresh Device List
         #========================
         $syncHash.btnRefreshList.Add_Click({
-            If($syncHash.Data.IntuneDevices.count -gt 0){
-                #clear current list
+            $this.IsEnabled = $false
+            Update-IDMProgress -Runspace $synchash -StatusMsg ('Refreshing managed [{0}] device list...' -f $syncHash.properties.DevicePlatform) -Indeterminate
+
+            #clear current list
+            $syncHash.btnRefreshList.Dispatcher.Invoke("Normal",[action]{
+                $syncHash.txtSearchIntuneDevices.Text = 'Search...'
                 $syncHash.listIntuneDevices.Items.Clear()
-                If($null -ne $syncHash.Data.AuthToken){
-                    #use search. Not live
-                    If($syncHash.txtSearchIntuneDevices.Text -ne 'Search...'){
-                        Search-UIDeviceList -ItemsList $syncHash.Data.IntuneDevices -ListObject $syncHash.listIntuneDevices -Identifier 'deviceName' -filter $syncHash.txtSearchIntuneDevices.Text
-                    }Else{
-                        Add-UIList -ItemsList $syncHash.Data.IntuneDevices -ListObject $syncHash.listIntuneDevices -Identifier 'deviceName'
-                    }
+            })
+
+            #grab all managed devices
+            If($null -ne $syncHash.Data.AuthToken){
+                $DeviceParams = @{AuthToken=$syncHash.Data.AuthToken;IncludeEAS=$true}
+                If($syncHash.Properties.DevicePlatform){
+                    $DeviceParams += @{Platform=$syncHash.Properties.DevicePlatform}
                 }
+                If($syncHash.Properties.DevicePrefix){
+                    $DeviceParams += @{Filter=$syncHash.Properties.DevicePrefix}
+                }
+                #refresh list
+                #$syncHash.Data.IntuneDevices = @()
+                #$syncHash.Data.IntuneDevices += Get-IDMDeviceInRunspace -Runspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
+                Get-IDMDeviceInRunspace -Runspace $syncHash -ParentRunspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
+                #$syncHash.Data.IntuneDevices = @(Get-IDMDevice @DeviceParams -Expand)
             }
+
+            If($syncHash.Data.IntuneDevices.count -gt 0)
+            {
+                $syncHash.tabDetails.Visibility = 'Visible'
+                $syncHash.tabRenamer.Visibility = 'Visible'
+
+                $syncHash.btnRefreshList.IsEnabled = $true
+                $syncHash.btnNewDeviceName.IsEnabled =$true
+
+                Update-IDMProgress -Runspace $synchash -StatusMsg ('Found {0} devices the meet platform requirement [{1}]' -f $syncHash.Data.IntuneDevices.count,$syncHash.properties.DevicePlatform) -PercentComplete 100
+
+                #Add-UIList -ItemsList $syncHash.Data.IntuneDevices -ListObject $syncHash.listIntuneDevices -Identifier 'deviceName'
+            }
+            Else{
+                $syncHash.btnRefreshList.IsEnabled = $false
+                $syncHash.btnNewDeviceName.IsEnabled = $false
+                Update-IDMProgress -Runspace $synchash -StatusMsg ('No devices found') -PercentComplete 100 -Color 'Red'
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("No devices found. Log into a different Azure tenant or credentials to retrieve registered devices") -Type Error
+            }
+            $this.IsEnabled = $true
         })
+
 
         $syncHash.btnAPProfileExport.Add_Click({
             $this.IsEnabled = $false
@@ -1000,21 +1090,55 @@ Function Show-IDMWindow
 
                     $Message=("Autopilot Profile [{0}] was exported to: [{1}]" -f $SelectedAPProfile.displayName,"$env:UserProfile\Desktop\AutopilotConfigurationFile.json")
                     $syncHash.txtStatus.Text = $Message
-                    Write-UIOutput -UIObject $syncHash.Logging -Message $Message -Passthru
+                    Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message $Message
                 }
             })
             $this.IsEnabled = $true
         })
 
         $syncHash.btnHardwareDeviceInfo.Add_Click({
-            $Data = ($syncHash.Data.SelectedDevice | Select deviceRegistrationState,azureADRegistered,easDeviceId,userPrincipalName,userId,wiFiMacAddress,
-                                                    easActivated,userDisplayName,aadRegistered,complianceState,deviceType,joinType,specificationVersion,skuNumber,serialNumber,ownerType,
-                                                    processorArchitecture,isEncrypted,managementState,thernetMacAddress,model,physicalMemoryInBytes,
-                                                    id,emailAddress,osVersion,deviceEnrollmentType,azureADDeviceId,freeStorageSpaceInBytes,
-                                                    operatingSystem,manufacturer,managementAgent,deviceName,chassisType,enrollmentProfileName,
-                                                    totalStorageSpaceInBytes,autopilotEnrolled,managedDeviceOwnerType,
-                                                    skuFamily).psobject.properties | foreach -begin {$h=@{}} -process {$h."$($_.Name)" = $_.Value} -end {$h}
-            $syncHash.lstHardwareDevice.ItemsSource = $Data
+            $syncHash.btnHardwareDeviceInfo.Dispatcher.Invoke("Normal",[action]{
+                If($syncHash.Data.SelectedDevice){
+                    If($syncHash.chkHardwareDeviceRemote.IsChecked -eq $true){
+                        Try{
+                            $DeviceInfo = Get-PlatformInfo -DeviceName $syncHash.Data.SelectedDevice.deviceName -ErrorAction Stop
+                        }
+                        Catch{
+                            $syncHash.txtStatus.Foreground = 'Red'
+                            $syncHash.txtStatus.Text =('{1}' -f $_.exception.message)
+                        }
+
+                        $DeviceData = New-Object PSObject
+                        Foreach($p in ($syncHash.Data.SelectedDevice | Get-Member -MemberType NoteProperty) )
+                        {
+                            $DeviceData | Add-Member NoteProperty $p.name -Value $syncHash.Data.SelectedDevice.($p.name)
+                        }
+                        #$AADObjects | Where displayName -eq 'DTOLAB-46VEYL1'
+                        If($DeviceInfo){
+                            Foreach($p in ($DeviceInfo | Get-Member -MemberType NoteProperty))
+                            {
+                                If($p.name -notin ($DeviceData | Get-Member -MemberType NoteProperty).Name){
+                                    $DeviceData | Add-Member NoteProperty $p.name -Value $DeviceInfo.($p.name)
+                                }
+                            }
+                            # Add the object to our array of output objects
+                        }
+                    }
+
+                    $Data = ($syncHash.Data.SelectedDevice | Select deviceRegistrationState,azureADRegistered,easDeviceId,userPrincipalName,userId,wiFiMacAddress,
+                                                            easActivated,userDisplayName,aadRegistered,complianceState,deviceType,joinType,specificationVersion,skuNumber,serialNumber,ownerType,
+                                                            processorArchitecture,isEncrypted,managementState,ethernetMacAddress,model,physicalMemoryInBytes,
+                                                            id,emailAddress,osVersion,deviceEnrollmentType,azureADDeviceId,freeStorageSpaceInBytes,
+                                                            operatingSystem,manufacturer,managementAgent,deviceName,chassisType,enrollmentProfileName,
+                                                            totalStorageSpaceInBytes,autopilotEnrolled,managedDeviceOwnerType,
+                                                            skuFamily).psobject.properties | foreach -begin {$h=@{}} -process {$h."$($_.Name)" = $_.Value} -end {$h}
+                    $syncHash.lstHardwareDevice.ItemsSource = $Data
+                }
+                Else{
+                    $syncHash.txtStatus.Foreground = 'Red'
+                    $syncHash.txtStatus.Text = 'You must select a device first'
+                }
+            })
         })
 
         # Update Category
@@ -1058,16 +1182,16 @@ Function Show-IDMWindow
             {
                 If(Test-CMModule -CMSite $syncHash.txtCMSiteCode.text -CMSite $syncHash.txtCMSiteServer.text){
                     $syncHash.txtRSA.text = 'Yes';$syncHash.txtRSAT.Foreground = 'Green'
-                    Write-UIOutput -UIObject $syncHash.Logging -Message ("Configuration Manager PowerShell module is installed: {0}" -f (Test-CMModule -CMSite $syncHash.txtCMSiteCode.text -CMSite $syncHash.txtCMSiteServer.text -Passthru)) -Type Info -Passthru
+                    Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Configuration Manager PowerShell module is installed: {0}" -f (Test-CMModule -CMSite $syncHash.txtCMSiteCode.text -CMSite $syncHash.txtCMSiteServer.text -Passthru)) -Type Info
                     $syncHash.btnCMDeviceSync.IsEnabled = $true
                 }Else{
-                    Write-UIOutput -UIObject $syncHash.Logging -Message ("Configuration Manager PowerShell module must be installed to be able to query CM device names") -Type Error -Passthru
+                    Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Configuration Manager PowerShell module must be installed to be able to query CM device names") -Type Error
                     $syncHash.txtRSAT.text = 'No'
                     $syncHash.btnCMSiteDeviceSync.IsEnabled = $False
                 }
             }
             Else{
-                Write-UIOutput -UIObject $syncHash.Logging -Message ("Configuration Manager settings are not configured, configure them to use the CM feature") -Type Warning -Passthru
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Configuration Manager settings are not configured, configure them to use the CM feature") -Type Warning
             }
             #grab all CM devices
             $AllCMDevices = Get-CMDevice
@@ -1094,11 +1218,13 @@ Function Show-IDMWindow
             Update-IDMProgress -Runspace $synchash -StatusMsg ("Please wait while loading {0} device and user assignment data, this can take a while..." -f $syncHash.Properties.DevicePlatform) -Indeterminate
 
             $syncHash.Window.Dispatcher.Invoke([action]{
-                $syncHash.Data.DeviceAssignments = Get-IDMDeviceAssignments -Platform $syncHash.Properties.DevicePlatform -DeviceId $syncHash.txtDeviceAzureObjectId.text
-                Write-UIOutput -UIObject $syncHash.Logging -Message ("Found {0} {1} device assignments for device [{2}]" -f $syncHash.Data.DeviceAssignments.count,$syncHash.Properties.DevicePlatform,$syncHash.txtSelectedDevice.text) -Type info
-                $syncHash.Data.UserAssignments = Get-IDMUserAssignments -Platform $syncHash.Properties.DevicePlatform -UserId $syncHash.txtAssignedUserId.text
-                Write-UIOutput -UIObject $syncHash.Logging -Message ("Found {0} {1} user assignments for user [{2}]" -f $syncHash.Data.UserAssignments.count,$syncHash.Properties.DevicePlatform,$syncHash.txtAssignedUserUPN.text) -Type info
-                Show-IDMAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -DeviceAssignments $syncHash.Data.DeviceAssignments -UserData $syncHash.Data.AssignedUser -UserAssignments $syncHash.Data.UserAssignments
+
+                $syncHash.Data.DeviceAssignments = Get-IDMIntuneAssignments -Target Devices -Platform $syncHash.Properties.DevicePlatform -TargetId $syncHash.txtDeviceAzureObjectId.text -IncludePolicySetInherits
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Found {0} {1} device assignments for device [{2}]" -f $syncHash.Data.DeviceAssignments.count,$syncHash.Properties.DevicePlatform,$syncHash.txtSelectedDevice.text) -Type info
+                $syncHash.Data.UserAssignments = Get-IDMIntuneAssignments -Target Users -Platform $syncHash.Properties.DevicePlatform -TargetId $syncHash.txtAssignedUserId.text -IncludePolicySetInherits
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Found {0} {1} user assignments for user [{2}]" -f $syncHash.Data.UserAssignments.count,$syncHash.Properties.DevicePlatform,$syncHash.txtAssignedUserUPN.text) -Type info
+                Show-IDMAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -DeviceAssignments $syncHash.Data.DeviceAssignments -UserData $syncHash.Data.AssignedUser -UserAssignments $syncHash.Data.UserAssignments -IncludeInherited
+                #Show-IDMAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -UserData $syncHash.Data.AssignedUser -SupportScripts @("$FunctionPath\Intune.ps1","$FunctionPath\Runspace.ps1") -AuthToken $syncHash.Data.AuthToken
                 <#
                 $syncHash.Data.DeviceAssignments + $syncHash.Data.UserAssignments |
                     Select @{n='Assignment Name';e={$_.Name}}, @{n='Assignment Category';e={$_.Type}}, Status, Target, @{n='Azure AD group';e={$_.Group}},GroupType,@{n='Member Of';e={If($_.Target -eq 'Device'){$syncHash.Data.SelectedDevice.deviceName}Else{$syncHash.Data.AssignedUser.userPrincipalName} }}|
@@ -1124,11 +1250,11 @@ Function Show-IDMWindow
                 #START to build computer parameter
                 $GetComputersParam = @{identity=$syncHash.listIntuneDevices.SelectedItem}
                 $CompSearchParmAsString = $GetComputersParam.GetEnumerator() |%{ "$($_.Name) = $($_.Value)" }
-                Write-UIOutput -UIObject $syncHash.Logging -Message ("Searching for AD computers within the parameters:`n{0}" -f $CompSearchParmAsString) -Passthru
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Searching for AD computers within the parameters:`n{0}" -f $CompSearchParmAsString)
                 # list all computers in AD
                 $syncHash.Data.ADComputer = Get-ADComputer @GetComputersParam
                 If($syncHash.Data.ADComputer){
-                    Write-UIOutput -UIObject $syncHash.Logging -Message ("Found computer object in AD" ) -Passthru
+                    Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Found computer object in AD" )
                     $syncHash.txtADComputerDN.Text = $syncHash.Data.ADComputer.DistinguishedName
                     #$syncHash.txtADComputerOUPath.Text = ($syncHash.Data.ADComputer.DistinguishedName).Substring(($syncHash.Data.ADComputer.DistinguishedName).IndexOf('OU='))
                     #$syncHash.txtADComputerOU.Text = ($syncHash.Data.ADComputer.DistinguishedName).Split(',')[1].Split('OU=')[1]
@@ -1152,7 +1278,7 @@ Function Show-IDMWindow
             }
             Else{
                 $AdUserAsString = $syncHash.Data.ADUser | Select DistinguishedName,Name,SamAccountName,UserPrincipalName | Format-List | Out-String
-                Write-UIOutput -UIObject $syncHash.Logging -Message ("Found AD user:`n{0}" -f $AdUserAsString) -Passthru
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Found AD user:`n{0}" -f $AdUserAsString)
                 $syncHash.txtADUserDN.text = $syncHash.Data.ADUser.DistinguishedName
             }
         })
@@ -1186,12 +1312,14 @@ Function Show-IDMWindow
                     $GetComputersParam += @{searchscope='subtree'}
                 }
             }
+            Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Found {0} computer(s) in AD from search criteria" -f $Computers.count)
+
             # list all computers in AD
             $Computers = Get-ADComputer @GetComputersParam
             #TEST $Computers = @('BLY05A001','BLY05A002','BLY05A003','BLY05A005')
             $CompSearchParmAsString = $GetComputersParam.GetEnumerator() |%{ "$($_.Name) = $($_.Value)" }
-            Write-UIOutput -UIObject $syncHash.Logging -Message ("Searching for AD computers within the parameters:`n{0}" -f $CompSearchParmAsString) -Passthru
-            Write-UIOutput -UIObject $syncHash.Logging -Message ("Found {0} computer(s) in AD from search criteria" -f $Computers.count) -Passthru
+            Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Searching for AD computers within the parameters:`n{0}" -f $CompSearchParmAsString)
+
             switch($syncHash.cmbQueryRule.SelectedItem){
                 'User OU Name' {
                         #get the current user OU to be used as query
@@ -1260,7 +1388,7 @@ Function Show-IDMWindow
                 $MoveableObject = $true
             }
             Catch{
-                Write-UIOutput -UIObject $syncHash.Logging -Message ("Failed to rename device. Error: {0}" -f $_.Exception.Message) -Type Error -Passthru
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Failed to rename device. Error: {0}" -f $_.Exception.Message) -Type Error
                 $syncHash.txtNewDeviceNameStatus.Text = 'Failed to rename device. Please see log for more details'
                 $syncHash.txtNewDeviceNameStatus.Foreground = 'Red'
                 $MoveableObject = $false
@@ -1271,7 +1399,7 @@ Function Show-IDMWindow
                     Move-ADObject -Identity $syncHash.Data.ADComputer.DistinguishedName -TargetPath $syncHash.txtOUPath.Text
                 }
                 Catch{
-                    Write-UIOutput -UIObject $syncHash.Logging -Message ("Failed to move AD object [{2}] to [{1}]. Error: {0}" -f $_.Exception.Message,$syncHash.txtOUPath.Text,$syncHash.Data.ADComputer.Name) -Type Error -Passthru
+                    Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Failed to move AD object [{2}] to [{1}]. Error: {0}" -f $_.Exception.Message,$syncHash.txtOUPath.Text,$syncHash.Data.ADComputer.Name) -Type Error
                     $syncHash.txtNewDeviceNameStatus.Text = 'Failed to move device. Please see log for more details'
                     $syncHash.txtNewDeviceNameStatus.Foreground = 'Red'
                 }
@@ -1285,6 +1413,37 @@ Function Show-IDMWindow
         $syncHash.btnExit.Add_Click({
             Close-IDMWindow
         })
+
+
+        $syncHash.Window.Add_KeyDown({
+            #allow window in back if ESC is hit
+            if ( ($_.Key -match 'Esc') -and $syncHash.Window.Topmost ) {
+                $syncHash.Window.Topmost = $false
+            }
+            #and set inf front if hit again
+            ElseIf ( ($_.Key -match 'Esc') ) {
+                $syncHash.Window.Topmost = $true
+            }
+        })
+
+        # Before the UI is displayed
+        # Create a timer dispatcher to watch for value change externally on regular interval
+        # update those values when found using scriptblock ($updateblock)
+        $syncHash.Window.Add_SourceInitialized({
+            ## create a timer
+            $timer = new-object System.Windows.Threading.DispatcherTimer
+            ## set to fire 4 times every second
+            $timer.Interval = [TimeSpan]"0:0:0.01"
+            ## invoke the $updateBlock after each fire
+            $timer.Add_Tick( $updateDevices )
+            ## start the timer
+            $timer.Start()
+
+            if( -Not($timer.IsEnabled) ) {
+               $syncHash.Error = "Timer didn't start"
+            }
+        })
+
         #Add smooth closing for Window
         $syncHash.Window.Add_Loaded({ $syncHash.isLoaded = $True })
         $syncHash.Window.Add_Closing({ $syncHash.isClosing = $True; Close-IDMWindow })
@@ -1332,4 +1491,5 @@ $global:syncHash.Properties
 $global:syncHash.Data
 #show any UI error from isolated runspace
 $global:syncHash.Error
-#$Global:AuthToken = $syncHash.Data.AuthToken
+
+$Global:AuthToken = $syncHash.Data.AuthToken
