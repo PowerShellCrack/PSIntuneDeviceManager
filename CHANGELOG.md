@@ -1,5 +1,12 @@
 # Change log for IntuneDeviceManagerUI.ps1
 
+## 1.4.3 - July 11, 2022
+
+- Created runspace pool for assignment data retrieval; faster by 2 minutes.
+- Fixed View assignment button status and lockup issue.
+- Changed button to show disabled when clicked and then reenable when complete.
+- Fixed assignment export; one-drive changes path; use registry key to find it. 
+
 ## 1.4.2 - July 7, 2022
 
 - Change the function of refresh button to update list instead or use cache list.

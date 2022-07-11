@@ -25,8 +25,15 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="border" Property="BorderBrush" Value="#FF1D3245" />
+                            <Setter TargetName="border" Property="Background" Value="#4682b4" />
                         </Trigger>
 
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="border" Property="BorderBrush" Value="Gray" />
+                            <Setter TargetName="border" Property="Background" Value="LightGray" />
+                            <Setter Property="Button.Foreground" Value="Gray" />
+                        </Trigger>
+                        
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="border" Property="BorderBrush" Value="#FF1D3245" />
                             <Setter Property="Button.Foreground" Value="#FF1D3245" />

@@ -28,7 +28,12 @@
 							<Setter TargetName="border" Property="BorderBrush" Value="#FFE8EDF9" />
 						</Trigger>
 
-						<Trigger Property="IsPressed" Value="True">
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="border" Property="BorderBrush" Value="#004275" />
+                            <Setter Property="Button.Foreground" Value="#336891" />
+                        </Trigger>
+
+                        <Trigger Property="IsPressed" Value="True">
 							<Setter TargetName="border" Property="BorderBrush" Value="#FF1D3245" />
 						</Trigger>
 					</ControlTemplate.Triggers>

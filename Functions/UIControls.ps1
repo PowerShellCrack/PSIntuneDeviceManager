@@ -778,6 +778,8 @@ Function Show-IDMAssignmentsWindow {
         [Parameter(Mandatory=$true,ParameterSetName='PreLoadId')]
         [string[]]$SupportScripts,
 
+        $ParentSyncHash,
+
         [Parameter(Mandatory=$false,ParameterSetName='PreloadData')]
         [Parameter(Mandatory=$true,ParameterSetName='PreLoadId')]
         $AuthToken,
@@ -809,6 +811,7 @@ Function Show-IDMAssignmentsWindow {
     $ASPRunSpace.ThreadOptions = "ReuseThread"
     $ASPRunSpace.Open() | Out-Null
     $ASPRunSpace.SessionStateProxy.SetVariable("syncHash",$syncHash)
+    $ASPRunSpace.SessionStateProxy.SetVariable("ParentSyncHash",$ParentSyncHash)
     $PowerShellCommand = [PowerShell]::Create().AddScript({
 
     [string]$xaml = @"
@@ -883,6 +886,19 @@ Function Show-IDMAssignmentsWindow {
         #===========================================================================
         $xaml.SelectNodes("//*[@Name]") | %{ $syncHash."$($_.Name)" = $syncHash.Window.FindName($_.Name)}
 
+        #load scripts
+        Foreach($Script in $syncHash.Scripts){
+            . $Script
+        }
+
+        #add elements that you want to update often
+        #the value must also be added to top of function as synchash property
+        #then it can be called by the timer to update
+        $updateAssignments = {
+            $syncHash.lstDeviceAssignments.Items.Refresh();
+        }
+
+
         # INNER  FUNCTIONS
         #Closes UI objects and exits (within runspace)
         Function Close-IDMAssignmentsWindow
@@ -891,223 +907,6 @@ Function Show-IDMAssignmentsWindow {
             #if runspace has not errored Dispose the UI
             if (!($syncHash.isClosing)) { $syncHash.Window.Close() | Out-Null }
         }
-
-        Function Get-Assignments {
-            param(
-                $parentSyncHash,
-                $Device,
-                $DeviceData,
-                $UPN,
-                $UserData,
-                $Scripts,
-                $AuthToken
-            )
-
-            $syncHash = [hashtable]::Synchronized(@{})
-            $RunSpace = [runspacefactory]::CreateRunspace()
-            $RunSpace.ApartmentState = "STA"
-            $RunSpace.ThreadOptions = "ReuseThread"
-            $RunSpace.Open()
-            $Runspace.SessionStateProxy.SetVariable("syncHash",$syncHash)
-            $RunSpace.SessionStateProxy.SetVariable("parentSyncHash",$parentSyncHash)
-            $RunSpace.SessionStateProxy.SetVariable("UPN",$UPN)
-            $RunSpace.SessionStateProxy.SetVariable("UserData",$UserData)
-            $RunSpace.SessionStateProxy.SetVariable("Device",$Device)
-            $RunSpace.SessionStateProxy.SetVariable("DeviceData",$DeviceData)
-            $RunSpace.SessionStateProxy.SetVariable("Scripts",$Scripts)
-            $RunSpace.SessionStateProxy.SetVariable("AuthToken",$AuthToken)
-
-            $code = {
-                #load scripts
-                Foreach($Script in $Scripts){
-                    . $Script
-                    $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                        $parentSyncHash.txtStatus.text = ('Loading script:' + $Script)
-                    })
-                }
-                $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                    $parentSyncHash.txtStatus.text = ('Done loading script')
-                })
-
-                $parentSyncHash.ProgressBar.Dispatcher.Invoke("Normal",[action]{
-                    $parentSyncHash.ProgressBar.IsIndeterminate = $true
-                    $parentSyncHash.ProgressBar.Foreground = 'green'
-                })
-
-                #if device and user data provided
-                If($DeviceData){$syncHash.DeviceData = $DeviceData;$Device=$DeviceData.deviceName }
-                If($UserData){$syncHash.UserData = $UserData;$UPN=$UserData.userPrincipalName}
-
-                $parentSyncHash.ProgressBar.Dispatcher.Invoke("Normal",[action]{
-                    If(-Not($parentSyncHash.txtDeviceName.text) -and -Not($parentSyncHash.txtAssignedUPN.text)){
-
-                        $parentSyncHash.ProgressBar.IsIndeterminate = $false
-                        $parentSyncHash.ProgressBar.Value = 100
-                        $parentSyncHash.ProgressBar.Foreground = 'Red'
-                        $parentSyncHash.txtPercentage.Text = ('' + 0 + '%')
-                        $parentSyncHash.txtStatus.text = "A device name or user principal name must be populated to get assignments:`n" + $parentSyncHash.txtDeviceName.text + ' | ' + $parentSyncHash.txtAssignedUPN.text
-                    }
-                    Else{
-                        $parentSyncHash.txtStatus.text = "Loading assignments for:`n" + $parentSyncHash.txtDeviceName.text + ' | ' + $parentSyncHash.txtAssignedUPN.text
-
-                        If( -NOT([string]::IsNullOrEmpty($Device)) ){
-                            Try{
-                                If([string]::IsNullOrEmpty($syncHash.DeviceData)){
-                                    $DeviceParams = @{Filter=$Device;AuthToken=$AuthToken;IncludeEAS=$true}
-                                    #get device details
-                                    $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                                        $syncHash.DeviceData = Get-IDMDevice @DeviceParams -Expand
-                                    })
-                                    If(-Not($UPN)){
-                                        $UPN = $syncHash.DeviceData.userPrincipalName
-                                    }
-                                }
-
-                                $AssignmentParams = @{
-                                    Target='Devices'
-                                    TargetId=$syncHash.DeviceData.azureADObjectId
-                                    Platform=$syncHash.DeviceData.operatingSystem
-                                    AuthToken=$AuthToken
-                                }
-
-                                #get device assignments
-                                $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                                    $DeviceAssignments = Get-IDMIntuneAssignmentsInRunspace -Runspace $SyncHash -ParentRunspace $parentSyncHash @AssignmentParams -IncludePolicySetInherits:$parentSyncHash.Inherited
-                                })
-                                #Send back to parent synchash
-                                $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                                    $parentSyncHash.AssignmentData += $DeviceAssignments
-                                })
-                            }
-                            Catch{
-                                $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                                    $parentSyncHash.txtStatus.text = ('Unable to retrieve assignments for device [{0}]: {1}' -f $Device,$_.exception.message)
-                                })
-                            }
-                        }
-                    }
-                })
-                <#
-                Else{
-                    If( -NOT([string]::IsNullOrEmpty($Device)) ){
-                        Try{
-                            If([string]::IsNullOrEmpty($syncHash.DeviceData)){
-                                $DeviceParams = @{Filter=$Device;AuthToken=$AuthToken;IncludeEAS=$true}
-                                #get device details
-                                $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                                    $syncHash.DeviceData = Get-IDMDevice @DeviceParams -Expand
-                                })
-                                If(-Not($UPN)){
-                                    $UPN = $syncHash.DeviceData.userPrincipalName
-                                }
-                            }
-
-                            $AssignmentParams = @{
-                                Target='Devices'
-                                TargetId=$syncHash.DeviceData.azureADObjectId
-                                Platform=$syncHash.DeviceData.operatingSystem
-                                AuthToken=$AuthToken
-                            }
-
-                            #get device assignments
-                            $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                                $DeviceAssignments = Get-IDMIntuneAssignments @AssignmentParams -IncludePolicySetInherits:$parentSyncHash.Inherited
-                            })
-                            #Send back to parent synchash
-                            $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                                $parentSyncHash.AssignmentData += $DeviceAssignments
-                            })
-                        }
-                        Catch{
-                            $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                                $parentSyncHash.txtStatus.text = ('Unable to retrieve assignments for device [{0}]: {1}' -f $Device,$_.exception.message)
-                            })
-                        }
-                    }
-
-                    If( -NOT([string]::IsNullOrEmpty($UPN)) ){
-
-                        Try{
-                            If([string]::IsNullOrEmpty($syncHash.UserData)){
-                                $UserParams = @{UPN=$UPN;AuthToken=$AuthToken}
-                                #get User details
-                                $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                                    $syncHash.UserData = Get-IDMDeviceAADUser @UserParams
-                                })
-                            }
-                        }
-                        Catch{
-                            $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                                $parentSyncHash.txtStatus.text = ('Failed to retrieve user data for [{0}]: {1}' -f $UPN,$_.exception.message)
-                            })
-                        }
-
-                        If($syncHash.UserData.id){
-                            Try{
-                                #get User assignments
-                                $AssignmentParams = @{Target='Users';TargetId= $syncHash.UserData.id;AuthToken=$AuthToken}
-                                If($syncHash.DeviceData){
-                                    $AssignmentParams += @{Platform=$syncHash.DeviceData.operatingSystem}
-                                }
-                                #populate assignments data
-                                $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                                    $UserAssignments = Get-IDMIntuneAssignments @AssignmentParams -IncludePolicySetInherits:$parentSyncHash.Inherited
-                                })
-                                #Send back to parent synchash
-                                $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                                    $parentSyncHash.AssignmentData += $UserAssignments
-                                })
-                            }
-                            Catch{
-                                $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                                    $parentSyncHash.txtStatus.text = ('Failed to retrieve assignments for user [{0}]: {1}' -f $UPN,$_.exception.message)
-                                })
-                            }
-                        }
-                        Else{
-                            $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                                $parentSyncHash.txtStatus.text = ('No data was found for [{0}]' -f $UPN)
-                            })
-                        }
-
-                    }
-
-                    $parentSyncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                        $parentSyncHash.lstDeviceAssignments.ItemsSource = $parentSyncHash.AssignmentData
-                        $parentSyncHash.txtTotalAssignments.Text = $parentSyncHash.AssignmentData.Count
-                        $parentSyncHash.txtDeviceAssignments.Text = $parentSyncHash.DeviceAssignments.Count
-                        $parentSyncHash.txtUserAssignments.Text = $parentSyncHash.UserAssignments.Count
-
-                        $parentSyncHash.ProgressBar.IsIndeterminate = $false
-                        $parentSyncHash.ProgressBar.Value = 100
-                        $parentSyncHash.ProgressBar.Foreground = 'Green'
-                        $parentSyncHash.txtPercentage.Text = ('' + 100 + '%')
-                    })
-                }#>
-            }
-            $PSinstance = [powershell]::Create().AddScript($Code)
-            $PSinstance.Runspace = $Runspace
-            $AsyncHandle = $PSinstance.BeginInvoke()
-
-            #cleanup registered object
-            Register-ObjectEvent -InputObject $Runspace `
-                -EventName 'AvailabilityChanged' `
-                -Action {
-
-                    if($Sender.RunspaceAvailability -eq "Available")
-                    {
-                        $Sender.Closeasync()
-                        $Sender.Dispose()
-                        # Speed up resource release by calling the garbage collector explicitly.
-                        # Note that this will pause *all* threads briefly.
-                        [GC]::Collect()
-                    }
-
-                } | Out-Null
-
-            return $Data.AssignmentData
-        }
-
 
         # UI INITIAL LOAD
         #=================
@@ -1229,10 +1028,10 @@ Function Show-IDMAssignmentsWindow {
             [System.Windows.Controls.Primitives.TextBoxBase]::TextChangedEvent,
             [System.Windows.RoutedEventHandler]{
                 If($syncHash.cmbFilterColumns.SelectedItem){
-                    $syncHash.lstDeviceAssignments.ItemsSource = ($Global:AssignmentList | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -like "*$($syncHash.txtAssignmentSearch.text)*"})
+                    $syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -like "*$($syncHash.txtAssignmentSearch.text)*"})
                 }
                 Else{
-                    $syncHash.lstDeviceAssignments.ItemsSource = ($Global:AssignmentList | Where {$_.Name -like "*$($syncHash.txtAssignmentSearch.text)*"})
+                    $syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.Name -like "*$($syncHash.txtAssignmentSearch.text)*"})
                 }
                 $syncHash.btnReset.IsEnabled = $true
             }
@@ -1241,6 +1040,7 @@ Function Show-IDMAssignmentsWindow {
         $syncHash.txtDeviceName.AddHandler(
             [System.Windows.Controls.Primitives.TextBoxBase]::TextChangedEvent,
             [System.Windows.RoutedEventHandler]{
+                $syncHash.btnAssignments.IsEnabled = $true
                 $syncHash.btnAssignments.Visibility = 'Visible'
             }
         )
@@ -1248,6 +1048,7 @@ Function Show-IDMAssignmentsWindow {
         $syncHash.txtAssignedUPN.AddHandler(
             [System.Windows.Controls.Primitives.TextBoxBase]::TextChangedEvent,
             [System.Windows.RoutedEventHandler]{
+                $syncHash.btnAssignments.IsEnabled = $true
                 $syncHash.btnAssignments.Visibility = 'Visible'
                 $syncHash.ProgressBar.Visibility = 'Visible'
                 $syncHash.txtPercentage.Visibility = 'Visible'
@@ -1259,7 +1060,7 @@ Function Show-IDMAssignmentsWindow {
 
         $syncHash.cmbFilterColumns.Add_SelectionChanged({
             #sort it
-            $syncHash.lstDeviceAssignments.ItemsSource = $Global:AssignmentList | Sort $syncHash.cmbFilterColumns.SelectedItem
+            $syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Sort $syncHash.cmbFilterColumns.SelectedItem)
             #first sort data by selected item
             #$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Sort $syncHash.cmbFilterColumns.SelectedItem)
             #build values for next item
@@ -1286,9 +1087,9 @@ Function Show-IDMAssignmentsWindow {
         $syncHash.cmbFilterValues.Add_SelectionChanged({
             #filter it based on operator
             switch($syncHash.cmbFilterOperators.SelectedItem){
-                "include" {$syncHash.lstDeviceAssignments.ItemsSource = $Global:AssignmentList | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -eq $syncHash.cmbFilterValues.SelectedItem}}
-                "exclude" {$syncHash.lstDeviceAssignments.ItemsSource = $Global:AssignmentList | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -ne $syncHash.cmbFilterValues.SelectedItem}}
-                default {$syncHash.lstDeviceAssignments.ItemsSource = $Global:AssignmentList | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -eq $syncHash.cmbFilterValues.SelectedItem}}
+                "include" {$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -eq $syncHash.cmbFilterValues.SelectedItem})}
+                "exclude" {$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -ne $syncHash.cmbFilterValues.SelectedItem})}
+                default {$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -eq $syncHash.cmbFilterValues.SelectedItem})}
             }
             #$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -eq $syncHash.cmbFilterValues.SelectedItem})
             $syncHash.lblFilterValue.Content = $syncHash.cmbFilterValues.SelectedItem.ToUpper()
@@ -1307,34 +1108,74 @@ Function Show-IDMAssignmentsWindow {
             $syncHash.cmbFilterValues.IsEnabled = $false
 
             $syncHash.lstDeviceAssignments.ItemsSource = $syncHash.AssignmentData
+            #update Prog
+            Update-IDMProgress -Runspace $syncHash -PercentComplete 100 -Color Green
             #disable button
             $syncHash.btnReset.IsEnabled = $false
         })
 
-
-
         $syncHash.btnAssignments.Add_Click({
             # disable this button to prevent multiple clicks.
             $this.IsEnabled = $false
-            If($syncHash.PreloadType -eq 'PreloadData'){
-                $syncHash.Logging += 'Get-Assignments -parentSyncHash $syncHash -DeviceData $syncHash.DeviceData -UserData $syncHash.UserData -Scripts $syncHash.Scripts -AuthToken $syncHash.AuthToken'
-                $syncHash.AssignmentData = Get-Assignments -parentSyncHash $syncHash -DeviceData $syncHash.DeviceData -UserData $syncHash.UserData -Scripts $syncHash.Scripts -AuthToken $syncHash.AuthToken
+            $syncHash.lstDeviceAssignments.ItemsSource.Clear()
+            Update-IDMProgress -Runspace $syncHash -StatusMsg ("Please wait while loading device and user assignment data, this can take a while...") -Indeterminate
+
+            $syncHash.Window.Dispatcher.Invoke("Normal",[action]{
+
+                #$syncHash.DeviceData = Get-IDMDevice -Filter $syncHash.txtDeviceName.Text -AuthToken $syncHash.AuthToken -IncludeEAS -Expand
+                If($syncHash.DeviceData = Get-IDMDevice -Filter $syncHash.txtDeviceName.Text -AuthToken $syncHash.AuthToken -IncludeEAS -Expand)
+                {
+                    If([string]::IsNullOrEmpty($syncHash.txtAssignedUPN.Text)){
+                        $syncHash.txtAssignedUPN.Text = $syncHash.DeviceData.userPrincipalName
+                    }
+                    $syncHash.UserData = Get-IDMDeviceAADUser -UPN $syncHash.txtAssignedUPN.Text
+
+                    $Global:AssignmentList = Get-IDMIntuneAssignmentsInRunspace `
+                                                        -Platform $syncHash.DeviceData.OperatingSystem `
+                                                        -TargetSet @{devices=$syncHash.DeviceData.azureADObjectId;users=$syncHash.UserData.id} `
+                                                        -AuthToken $syncHash.AuthToken -IncludePolicySetInherits -Passthru #`
+                                                        #-ListObject $syncHash.lstDeviceAssignments
+
+                    #Set global list so other elements can use it
+                    $syncHash.AssignmentData = $Global:AssignmentList
+                    $syncHash.DeviceAssignments = ($Global:AssignmentList | Where Target -eq 'Devices')
+                    $syncHash.UserAssignments = ($Global:AssignmentList | Where Target -eq 'Users')
+
+                    #Update count
+                    $syncHash.txtTotalAssignments.Text = $syncHash.AssignmentData.Count
+                    $syncHash.txtDeviceAssignments.Text = $syncHash.DeviceAssignments.Count
+                    $syncHash.txtUserAssignments.Text = $syncHash.UserAssignments.Count
+
+                    #update list view
+                    $syncHash.lstDeviceAssignments.ItemsSource = $syncHash.AssignmentData
+                }
+
+            })
+
+            If($syncHash.DeviceData){
+                #update Prog
+                Update-IDMProgress -Runspace $syncHash -PercentComplete 100 -StatusMsg ('Found {0} assignments for user [{1}] and device [{2}]' -f $syncHash.AssignmentData.count,$syncHash.txtAssignedUPN.Text,$syncHash.txtDeviceName.Text) -Color Green
             }
             Else{
-                $syncHash.Logging += 'Get-Assignments -parentSyncHash $syncHash -Device $syncHash.txtDeviceName.text -UPN $syncHash.txtAssignedUPN.text -Scripts $syncHash.Scripts -AuthToken $syncHash.AuthToken'
-                $syncHash.AssignmentData = Get-Assignments -parentSyncHash $syncHash -Device $syncHash.txtDeviceName.text -UPN $syncHash.txtAssignedUPN.text -Scripts $syncHash.Scripts -AuthToken $syncHash.AuthToken
+                Update-IDMProgress -Runspace $syncHash -PercentComplete 100 -StatusMsg ('Unable to find device named [{1}]. Type in new name and try again.' -f $syncHash.txtDeviceName.Text) -Color Red
+                $Global:AssignmentList = $null
+                $syncHash.AssignmentData = $Null
+                $syncHash.txtDeviceName.Text = $Null
+                $syncHash.txtAssignedUPN.Text = $Null
             }
-
-            #Set global list so other elements can use it
-            $Global:AssignmentList = $syncHash.AssignmentData
-
-            $this.IsEnabled = $true
         })
 
         $syncHash.btnExport.Add_Click({
             # disable this button to prevent multiple export.
             $this.IsEnabled = $false
-            $syncHash.AssignmentData | Export-Csv -NoTypeInformation "$env:USERPROFILE\Desktop\$($syncHash.txtDeviceName.Text)_$($syncHash.txtAssignedUPN.Text.replace('@','_'))_$(Get-Date -Format yyyyMMdd).csv" -Force
+            $UserDesktopPath = Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders" | Select -ExpandProperty Desktop
+            If(Test-Path $UserDesktopPath){
+                $ExportFilePath = "$UserDesktopPath\$($syncHash.txtDeviceName.Text)_$($syncHash.txtAssignedUPN.Text.replace('@','_'))_$(Get-Date -Format yyyyMMdd).csv"
+            }Else{
+                $ExportFilePath = "$env:UserProfile\Desktop\$($syncHash.txtDeviceName.Text)_$($syncHash.txtAssignedUPN.Text.replace('@','_'))_$(Get-Date -Format yyyyMMdd).csv"
+            }
+            $syncHash.AssignmentData | Export-Csv -NoTypeInformation $ExportFilePath -Force
+            $syncHash.txtStatus.text = ('Exported CSV file to {0}' -f $ExportFilePath)
         })
 
         $syncHash.btnExit.Add_Click({
@@ -1348,9 +1189,46 @@ Function Show-IDMAssignmentsWindow {
 
         If($syncHash.LoadOnStartup){
             $syncHash.btnAssignments.IsEnabled = $false
-            $syncHash.AssignmentData = Get-Assignments -parentSyncHash $syncHash -DeviceData $syncHash.DeviceData -UserData $syncHash.UserData -Scripts $syncHash.Scripts -AuthToken $syncHash.AuthToken
-            $syncHash.btnAssignments.IsEnabled = $true
+
+            $Global:AssignmentList = Get-IDMIntuneAssignmentsInRunspace `
+                                                    -Platform $syncHash.DeviceData.OperatingSystem `
+                                                    -TargetSet @{devices=$syncHash.DeviceData.azureADObjectId;users=$syncHash.UserData.id} `
+                                                    -AuthToken $syncHash.AuthToken -IncludePolicySetInherits -Passthru #`
+                                                    #-ListObject $syncHash.lstDeviceAssignments
+
+            #Set global list so other elements can use it
+            $syncHash.AssignmentData = $Global:AssignmentList
+            $syncHash.DeviceAssignments = ($Global:AssignmentList | Where Target -eq 'Devices')
+            $syncHash.UserAssignments = ($Global:AssignmentList | Where Target -eq 'Users')
+
+            #Update count
+            $syncHash.txtTotalAssignments.Text = $syncHash.AssignmentData.Count
+            $syncHash.txtDeviceAssignments.Text = $syncHash.DeviceAssignments.Count
+            $syncHash.txtUserAssignments.Text = $syncHash.UserAssignments.Count
+
+            #update list view
+            $syncHash.lstDeviceAssignments.ItemsSource = $syncHash.AssignmentData
+
+            Update-IDMProgress -Runspace $syncHash -PercentComplete 100 -StatusMsg ('Found {0} assignments for user [{1}] and device [{2}]' -f $syncHash.AssignmentData.count,$syncHash.txtAssignedUPN.Text,$syncHash.txtDeviceName.Text) -Color Green
         }
+
+        # Before the UI is displayed
+        # Create a timer dispatcher to watch for value change externally on regular interval
+        # update those values when found using scriptblock ($updateblock)
+        $syncHash.Window.Add_SourceInitialized({
+            ## create a timer
+            $timer = new-object System.Windows.Threading.DispatcherTimer
+            ## set to fire 4 times every second
+            $timer.Interval = [TimeSpan]"0:0:0.01"
+            ## invoke the $updateBlock after each fire
+            $timer.Add_Tick( $updateAssignments )
+            ## start the timer
+            $timer.Start()
+
+            if( -Not($timer.IsEnabled) ) {
+               $syncHash.Error = "Timer didn't start"
+            }
+        })
 
         #Add smooth closing for Window
         $syncHash.Window.Add_Loaded({ $syncHash.isLoaded = $True })

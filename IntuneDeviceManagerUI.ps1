@@ -206,7 +206,8 @@ Function Show-IDMWindow
         [String]$XamlFile,
         [String]$StylePath,
         [String]$FunctionPath,
-        [hashtable]$Properties
+        [hashtable]$Properties,
+        [switch]$Wait
     )
     #build runspace
     $syncHash = [hashtable]::Synchronized(@{})
@@ -271,8 +272,9 @@ Function Show-IDMWindow
             $asyncWindow = Add-Type -MemberDefinition $Windowcode -name Win32ShowWindowAsync -namespace Win32Functions
             $null = $asyncWindow::ShowWindowAsync((Get-Process -PID $pid).MainWindowHandle, 0)
         }
-        #Closes UI objects and exits (within runspace)
 
+
+        #Closes UI objects and exits (within runspace)
         Function Close-IDMWindow
         {
             if ($syncHash.hadCritError) { Write-Host -Message "Background thread had a critical error" -ForegroundColor red }
@@ -280,11 +282,16 @@ Function Show-IDMWindow
             if (!($syncHash.isClosing)) { $syncHash.Window.Close() | Out-Null }
         }
 
-        #add elements that you want to update often
-        #the value must also be added to top of function as synchash property
-        #then it can be called by the timer to update
-        $updateDevices = {
 
+        $updateUI = {
+
+            If($syncHash.AssignmentWindow.Window.IsVisible -eq $true){
+                Update-IDMProgress -Runspace $synchash -StatusMsg ('Found {0} assignment(s) for device [{1}] and user [{2}]' -f $syncHash.AssignmentWindow.AssignmentData.count,$syncHash.Data.SelectedDevice.deviceName,$syncHash.Data.AssignedUser.userPrincipalName) -PercentComplete 100
+            }
+
+            If($syncHash.AssignmentWindow.Window){
+                $syncHash.btnViewIntuneAssignments.IsEnabled = $syncHash.AssignmentWindow.isClosed
+            }
         }
 
         # Start populating menu content
@@ -758,6 +765,7 @@ Function Show-IDMWindow
 
         #action for connect button
         $syncHash.btnMSGraphConnect.Add_Click({
+            $this.IsEnabled = $false
             Update-IDMProgress -Runspace $synchash -StatusMsg "Connecting to Microsoft Graph Api..." -Indeterminate
 
             If($syncHash.Properties.AppConnect)
@@ -780,6 +788,7 @@ Function Show-IDMWindow
                     'AppId'     = $syncHash.Properties.ApplicationId
                     'AppSecret' = $syncHash.pwdAppSecret.Password
                 }
+
                 Connect-MSGraphApp @AppConnectionDetails
                 $syncHash.Data.AuthToken = Connect-MSGraphAsAnApp @AppConnectionDetails
                 $syncHash.Data.ConnectedUPN = $syncHash.Properties.ApplicationId
@@ -855,6 +864,7 @@ Function Show-IDMWindow
                 #})
 
             }
+            $this.IsEnabled = $true
         })
 
         # Select a Device List
@@ -1097,6 +1107,7 @@ Function Show-IDMWindow
         })
 
         $syncHash.btnHardwareDeviceInfo.Add_Click({
+            $this.IsEnabled = $false
             $syncHash.btnHardwareDeviceInfo.Dispatcher.Invoke("Normal",[action]{
                 If($syncHash.Data.SelectedDevice){
                     If($syncHash.chkHardwareDeviceRemote.IsChecked -eq $true){
@@ -1139,6 +1150,7 @@ Function Show-IDMWindow
                     $syncHash.txtStatus.Text = 'You must select a device first'
                 }
             })
+            $this.IsEnabled = $true
         })
 
         # Update Category
@@ -1214,25 +1226,40 @@ Function Show-IDMWindow
         #========================
         $syncHash.btnViewIntuneAssignments.Add_Click({
             # disable this button to prevent multiple export.
-            $this.IsEnabled = $false
-            Update-IDMProgress -Runspace $synchash -StatusMsg ("Please wait while loading {0} device and user assignment data, this can take a while..." -f $syncHash.Properties.DevicePlatform) -Indeterminate
+            $syncHash.btnViewIntuneAssignments.Dispatcher.Invoke("Normal",[action]{
+                $this.IsEnabled = $false
+                Update-IDMProgress -Runspace $synchash -StatusMsg ("Please wait while loading device and user assignment data, this can take a while...") -Indeterminate
 
-            $syncHash.Window.Dispatcher.Invoke([action]{
+                #Get-IDMIntuneAssignmentsInRunspace -Runspace $syncHash -ParentRunspace $syncHash -Platform $syncHash.Properties.DevicePlatform -TargetSet @{devices=$syncHash.Data.SelectedDevice.azureADObjectId;users=$syncHash.Data.AssignedUser.id} -IncludePolicySetInherits
+                #Update-IDMProgress -Runspace $synchash -StatusMsg ("Please wait while loading device and user assignment data, this can take a while...") -Indeterminate
 
-                $syncHash.Data.DeviceAssignments = Get-IDMIntuneAssignments -Target Devices -Platform $syncHash.Properties.DevicePlatform -TargetId $syncHash.txtDeviceAzureObjectId.text -IncludePolicySetInherits
-                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Found {0} {1} device assignments for device [{2}]" -f $syncHash.Data.DeviceAssignments.count,$syncHash.Properties.DevicePlatform,$syncHash.txtSelectedDevice.text) -Type info
-                $syncHash.Data.UserAssignments = Get-IDMIntuneAssignments -Target Users -Platform $syncHash.Properties.DevicePlatform -TargetId $syncHash.txtAssignedUserId.text -IncludePolicySetInherits
-                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Found {0} {1} user assignments for user [{2}]" -f $syncHash.Data.UserAssignments.count,$syncHash.Properties.DevicePlatform,$syncHash.txtAssignedUserUPN.text) -Type info
-                Show-IDMAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -DeviceAssignments $syncHash.Data.DeviceAssignments -UserData $syncHash.Data.AssignedUser -UserAssignments $syncHash.Data.UserAssignments -IncludeInherited
+                #$syncHash.Data.DeviceAssignments = Get-IDMIntuneAssignments -Target Devices -Platform $syncHash.Properties.DevicePlatform -TargetId $syncHash.txtDeviceAzureObjectId.text -IncludePolicySetInherits
+                #Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Found {0} {1} device assignments for device [{2}]" -f $syncHash.Data.DeviceAssignments.count,$syncHash.Properties.DevicePlatform,$syncHash.txtSelectedDevice.text) -Type info
+                #$syncHash.Data.UserAssignments = Get-IDMIntuneAssignments -Target Users -Platform $syncHash.Properties.DevicePlatform -TargetId $syncHash.txtAssignedUserId.text -IncludePolicySetInherits
+                #Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Found {0} {1} user assignments for user [{2}]" -f $syncHash.Data.UserAssignments.count,$syncHash.Properties.DevicePlatform,$syncHash.txtAssignedUserUPN.text) -Type info
                 #Show-IDMAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -UserData $syncHash.Data.AssignedUser -SupportScripts @("$FunctionPath\Intune.ps1","$FunctionPath\Runspace.ps1") -AuthToken $syncHash.Data.AuthToken
+                #Show-IDMAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -DeviceAssignments $syncHash.Data.DeviceAssignments -UserData $syncHash.Data.AssignedUser -UserAssignments $syncHash.Data.UserAssignments -IncludeInherited
+
+                <#
+                Show-IDMAssignmentsWindow -ParentSynchash $syncHash -AuthToken $syncHash.Data.AuthToken `
+                                                -DeviceData $syncHash.Data.SelectedDevice `
+                                                -UserData $syncHash.Data.AssignedUser `
+                                                -SupportScripts @("$FunctionPath\Intune.ps1","$FunctionPath\Runspace.ps1","$FunctionPath\UIControls.ps1") -IncludeInherited
+                #>
+                $syncHash.AssignmentWindow = Show-IDMAssignmentsWindow -ParentSynchash $syncHash -AuthToken $syncHash.Data.AuthToken `
+                                                -DeviceData $syncHash.Data.SelectedDevice `
+                                                -UserData $syncHash.Data.AssignedUser `
+                                                -SupportScripts @("$FunctionPath\Intune.ps1","$FunctionPath\Runspace.ps1","$FunctionPath\UIControls.ps1") -IncludeInherited -LoadOnStartup
+
+
                 <#
                 $syncHash.Data.DeviceAssignments + $syncHash.Data.UserAssignments |
                     Select @{n='Assignment Name';e={$_.Name}}, @{n='Assignment Category';e={$_.Type}}, Status, Target, @{n='Azure AD group';e={$_.Group}},GroupType,@{n='Member Of';e={If($_.Target -eq 'Device'){$syncHash.Data.SelectedDevice.deviceName}Else{$syncHash.Data.AssignedUser.userPrincipalName} }}|
                     Out-GridView -Title ("Assignments :: Device [{0}], Assigned user [{1}]" -f $syncHash.Data.SelectedDevice.deviceName,$syncHash.Data.AssignedUser.userPrincipalName)
                 #>
-                $this.IsEnabled = $syncHash.Assignments.isClosed
-            },'Normal')
-            Update-IDMProgress -Runspace $synchash -StatusMsg ('Found {0} assignment(s) for device [{1}]' -f ($syncHash.Data.DeviceAssignments+$syncHash.Data.UserAssignments).count,$syncHash.Data.SelectedDevice.deviceName) -PercentComplete 100
+
+            })
+
         })
 
         #Currently Keep check and disabled
@@ -1435,7 +1462,7 @@ Function Show-IDMWindow
             ## set to fire 4 times every second
             $timer.Interval = [TimeSpan]"0:0:0.01"
             ## invoke the $updateBlock after each fire
-            $timer.Add_Tick( $updateDevices )
+            $timer.Add_Tick( $updateUI )
             ## start the timer
             $timer.Start()
 
@@ -1459,11 +1486,14 @@ Function Show-IDMWindow
     $PowerShellCommand.Runspace = $IDMRunSpace
     $AsyncHandle = $PowerShellCommand.BeginInvoke()
     #wait until runspace is completed before ending
-    do {
-        Start-sleep -m 100 }
-    while (!$AsyncHandle.IsCompleted)
-    #end invoked process
-    $null = $PowerShellCommand.EndInvoke($AsyncHandle)
+    If($Wait){
+        do {
+            Start-sleep -m 100 }
+        while (!$AsyncHandle.IsCompleted)
+        #end invoked process
+        $null = $PowerShellCommand.EndInvoke($AsyncHandle)
+    }
+
     #cleanup registered object
     Register-ObjectEvent -InputObject $syncHash.Runspace `
             -EventName 'AvailabilityChanged' `
