@@ -79,7 +79,7 @@ Function Get-IDMAutopilotDevice{
     Gets devices currently registered with Windows Autopilot.
 
     .DESCRIPTION
-    The Get-AutopilotDevice cmdlet retrieves either the full list of devices registered with Windows Autopilot for the current Azure AD tenant, or a specific device if the ID of the device is specified.
+    The Get-IDMAutopilotDevice cmdlet retrieves either the full list of devices registered with Windows Autopilot for the current Azure AD tenant, or a specific device if the ID of the device is specified.
 
     .PARAMETER id
     Optionally specifies the ID (GUID) for a specific Windows Autopilot device (which is typically returned after importing a new device)
@@ -93,7 +93,7 @@ Function Get-IDMAutopilotDevice{
     .EXAMPLE
     Get a list of all devices registered with Windows Autopilot
 
-    Get-AutopilotDevice
+    Get-IDMAutopilotDevice
     #>
     [cmdletbinding()]
     param
@@ -178,7 +178,7 @@ Function Set-IDMAutopilotDeviceTag{
     Updates grouptag for Autopilot device.
 
     .DESCRIPTION
-    The Set-AutopilotDevice cmdlet can be used to change the updatable properties on a Windows Autopilot device object.
+    The Set-IDMAutopilotDeviceTag cmdlet can be used to change the updatable properties on a Windows Autopilot device object.
 
     .PARAMETER id
     The Windows Autopilot device id (mandatory).
@@ -247,14 +247,3 @@ Function Set-IDMAutopilotDeviceTag{
         }
     }
 }
-
-$json = "{"
-if ($groupTag)
-{
-    $json = $json + " groupTag: `"$groupTag`""
-}
-else
-{
-    $json = $json.Trim(",")
-}
-$json = $json + " }"

@@ -52,9 +52,6 @@ Function Connect-MSGraphAsAnApp {
                                                 $context.Environment, $context.Tenant.Id.ToString(), $null, [Microsoft.Azure.Commands.Common.Authentication.ShowDialog]::Never, `
                                                 $null, "https://graph.windows.net").AccessToken
 
-        #Attempt to connect to Azure Ad using token
-        #Connect-AzureAD -AadAccessToken $aadToken -AccountId $context.Account.Id -TenantId $context.tenant.id | Out-Null
-
         $Body = @{
             Grant_Type    = "client_credentials"
             Scope         = "https://graph.microsoft.com/.default"

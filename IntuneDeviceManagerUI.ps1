@@ -164,7 +164,7 @@ If($ChangeLogPath){
 }
 #check modules
 #$ModulesNeeded = @('Microsoft.Graph.Intune','Microsoft.Graph.Authentication','Microsoft.Graph.DeviceManagement.Administration','AzureAD','WindowsAutoPilotIntune','Microsoft.Graph.Identity.DirectoryManagement')
-$ModulesNeeded = @('Az.Accounts','Microsoft.Graph.Intune','Microsoft.Graph.Authentication','AzureAD','WindowsAutoPilotIntune')
+$ModulesNeeded = @('Az.Accounts','Microsoft.Graph.Intune','Microsoft.Graph.Authentication','AzureAD')
 
 $ParamProps = @{
     Name = $scriptName
@@ -209,6 +209,13 @@ Function Show-IDMWindow
         [hashtable]$Properties,
         [switch]$Wait
     )
+    <#
+    $XamlFile=$XAMLFilePath
+    $StylePath=$StylePath
+    $FunctionPath=$FunctionPath
+    $Properties=$ParamProps
+    $Wait=$true
+    #>
     #build runspace
     $syncHash = [hashtable]::Synchronized(@{})
     $IDMRunSpace =[runspacefactory]::CreateRunspace()
@@ -224,6 +231,7 @@ Function Show-IDMWindow
     $IDMRunSpace.Open() | Out-Null
     $IDMRunSpace.SessionStateProxy.SetVariable("syncHash",$syncHash)
     $PowerShellCommand = [PowerShell]::Create().AddScript({
+    #$Code{
         #Load assembles to display UI
         [System.Reflection.Assembly]::LoadWithPartialName('PresentationFramework') | out-null
         [System.Reflection.Assembly]::LoadWithPartialName('PresentationCore')      | out-null
@@ -322,16 +330,36 @@ Function Show-IDMWindow
             $syncHash.AppModulePopup.IsOpen = $false
         })
         $syncHash.txtAppModuleList.text = ($syncHash.Data.MissingModules -Join ',')
+
+
         $syncHash.btnAppModuleInstall.Add_Click({
-            Foreach($Module in $syncHash.Data.MissingModules){
-                Install-Module -Name $Module -AllowClobber -Force
+            $err=0
+            #always install nuget if modules missing
+            If($syncHash.Data.MissingModules -gt 0){
+                Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
             }
-            $syncHash.lblAppModuleMsg.Foreground = 'White'
-            $syncHash.lblAppModuleMsg.Content = ("Modules installed, You must restart app...")
+
+            Foreach($Module in $syncHash.Data.MissingModules){
+                $syncHash.lblAppModuleMsg.Content = ("Installing module: {0}..." -f $Module)
+                Try{
+                    Install-Module -Name $Module -AllowClobber -Force -Confirm:$false
+                }Catch{
+                    $err++
+                    $syncHash.lblAppModuleMsg.Content = ("Failed: {0}..." -f $_.exception.message)
+                }
+            }
+            If($err -eq 0){
+                $syncHash.lblAppModuleMsg.Foreground = 'White'
+                $syncHash.lblAppModuleMsg.Content = ("Modules installed, You must restart app...")
+                $syncHash.btnAppModuleCancel.Content = 'Ok'
+            }
+            Else{
+                $syncHash.btnAppModuleCancel.Content = 'Close'
+            }
             $syncHash.btnAppModuleInstall.Visibility = 'Hidden'
-            $syncHash.btnAppModuleCancel.Content = 'Ok'
             $syncHash.AppSecretPopup.IsOpen = $false
         })
+
         $syncHash.btnAppSecretSubmit.Add_Click({
             If([string]::IsNullOrEmpty($syncHash.pwdAppSecret.Password) ){
                 $syncHash.lblAppSecretMsg.content = "Invalid Secret, please try again or cancel"
@@ -456,28 +484,20 @@ Function Show-IDMWindow
             $syncHash.txtRSAT.text = 'No'
             $syncHash.btnADUserSync.IsEnabled = $false
         }
+        
+        
         # check if RSAT PowerShell Module is installed
-        $syncHash.txtCMSiteCode.text = $syncHash.Properties.CMSiteCode
-        $syncHash.txtCMSiteServer.text = $syncHash.Properties.CMSiteServer
-
-        If(-Not[string]::IsNullOrEmpty($syncHash.txtCMSiteCode.text) -and -Not[string]::IsNullOrEmpty($syncHash.txtCMSiteServer.text))
-        {
-            If(Test-CMModule -CMSite $syncHash.txtCMSiteCode.text -CMSiteServer $syncHash.txtCMSiteServer.text){
-                $syncHash.txtRSA.text = 'Yes';$syncHash.txtRSAT.Foreground = 'Green'
-                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Configuration Manager PowerShell module is installed: {0}" -f (Test-CMModule -CMSite $syncHash.txtCMSiteCode.text -CMSite $syncHash.txtCMSiteServer.text -Passthru)) -Type Info
-                $syncHash.btnCMSiteSync.IsEnabled = $true
-            }
-            Else{
-                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Configuration Manager PowerShell module must be installed to be able to query CM device names") -Type Error
-                $syncHash.txtRSAT.text = 'No'
-                $syncHash.btnCMSiteSync.IsEnabled = $False
-            }
+        If(Test-CMModule){
+            $syncHash.txtCMModule.text = 'Yes';$syncHash.txtCMModule.Foreground = 'Green'
+            Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Configuration Manager PowerShell module is installed") -Type Info
+            $syncHash.btnCMSiteSync.IsEnabled = $true
         }
         Else{
-            Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Configuration Manager settings are not configured, configure them to use the CM feature") -Type Warning
+            Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Configuration Manager PowerShell module must be installed to be able to query CM device names") -Type Error
+            $syncHash.txtCMModule.text = 'No'
             $syncHash.btnCMSiteSync.IsEnabled = $False
         }
-
+        
         # Get PowerShell Version
         [hashtable]$envPSVersionTable = $PSVersionTable
         [version]$envPSVersion = $envPSVersionTable.PSVersion
@@ -495,6 +515,9 @@ Function Show-IDMWindow
         $syncHash.btnRefreshList.IsEnabled = $false
         # Populate config tab
         #----------------------
+        $syncHash.txtCMSiteCode.text = $syncHash.Properties.CMSiteCode
+        $syncHash.txtCMSiteServer.text = $syncHash.Properties.CMSiteServer
+
         @('User Root OU','Computers Root OU','Computers Default OU','Custom') | %{$syncHash.cmbSearchInOptions.Items.Add($_) | Out-Null}
         $syncHash.cmbSearchInOptions.SelectedItem = 'User Root OU'
 
@@ -826,7 +849,7 @@ Function Show-IDMWindow
                 #grab all managed devices
                 #$syncHash.Window.Dispatcher.Invoke("Normal",[action]{
                     #populate Autopilot profiles
-                    Add-UIList -Runspace $syncHash -ItemsList (Get-AutopilotProfile) -DropdownObject $syncHash.cmbAPProfile -Identifier 'displayName'
+                    Add-UIList -Runspace $syncHash -ItemsList (Get-IDMAutopilotProfile) -DropdownObject $syncHash.cmbAPProfile -Identifier 'displayName'
                     #populate device category
                     Add-UIList -Runspace $syncHash -ItemsList (Get-IDMDeviceCategory) -DropdownObject $syncHash.cmbDeviceCategoryList -Identifier 'displayName'
 
@@ -929,6 +952,7 @@ Function Show-IDMWindow
                 $syncHash.txtDeviceAzureId.Text = $syncHash.Data.SelectedDevice.azureADDeviceId
                 $syncHash.txtDeviceAzureObjectId.Text = $syncHash.Data.SelectedDevice.azureADObjectId
                 $syncHash.txtDeviceSerial.Text = $syncHash.Data.SelectedDevice.serialNumber
+                $syncHash.txtDeviceOSver.Text = $syncHash.Data.SelectedDevice.osVersion
                 If($syncHash.Data.SelectedDevice.isCompliant){
                     $syncHash.lblDeviceComplianceStatus.Foreground = 'Black'
                     $syncHash.chkDeviceComplianceStatus.IsChecked = $true
@@ -1028,12 +1052,13 @@ Function Show-IDMWindow
 
                 #$syncHash.txtAssignedUser.text = $syncHash.Data.AssignedUser.$($syncHash.cmbUserDisplayOptions.SelectedItem)
                 If($null -ne $syncHash.Data.DeviceStatus){
+                    $statusMsg = @()
                     switch($syncHash.Data.DeviceStatus.actionName){
-                        'setDeviceName' {$statusMsg = ('Device is pending rename to: {0}' -f $syncHash.Data.DeviceStatus.passcode);$FontColor = 'Red'}
-                        default {$statusMsg = 'No pending actions';$FontColor = 'Black'}
+                        'setDeviceName' {$statusMsg += "Device is pending rename to:{0}" -f "$($syncHash.Data.DeviceStatus.passcode)" ;$FontColor = 'Red'}
+                        'rebootNow' {$statusMsg += "Device is pending reboot";$FontColor = 'Red'}
                     }
                     $syncHash.txtDeviceStatus.Visibility='Visible'
-                    $syncHash.txtDeviceStatus.Text = $statusMsg
+                    $syncHash.txtDeviceStatus.Text = $statusMsg -join "`n"
                     $syncHash.txtDeviceStatus.Foreground = $FontColor
                 }Else{
                     $syncHash.txtDeviceStatus.Visibility='Hidden'
@@ -1095,7 +1120,7 @@ Function Show-IDMWindow
             $this.IsEnabled = $false
             $syncHash.btnAPProfileChange.Dispatcher.Invoke("Normal",[action]{
                 If($syncHash.cmbAPProfile.SelectedItem){
-                    $SelectedAPProfile = Get-AutopilotProfile | where DisplayName -eq $syncHash.cmbAPProfile.SelectedItem
+                    $SelectedAPProfile = Get-IDMAutopilotProfile | where DisplayName -eq $syncHash.cmbAPProfile.SelectedItem
                     $SelectedAPProfile | ConvertTo-AutopilotConfigurationJSON | Out-File "$env:UserProfile\Desktop\AutopilotConfigurationFile.json" -Encoding ASCII -Force
 
                     $Message=("Autopilot Profile [{0}] was exported to: [{1}]" -f $SelectedAPProfile.displayName,"$env:UserProfile\Desktop\AutopilotConfigurationFile.json")
@@ -1404,34 +1429,38 @@ Function Show-IDMWindow
             }
             $syncHash.btnNewDeviceName.IsEnabled = $true
         })
+
         # Rename Device
         #========================
         $syncHash.btnNewDeviceName.Add_Click({
-            #attempt to rename object in Intune
-            Try{
-                Invoke-IDMDeviceAction -DeviceID $syncHash.Data.SelectedDevice.id -Action Rename -NewDeviceName $syncHash.txtNewDeviceName.Text -ErrorAction Stop
-                $syncHash.txtNewDeviceNameStatus.Text = 'Successfully renamed device.'
-                $syncHash.txtNewDeviceNameStatus.Foreground = 'Green'
-                $MoveableObject = $true
-            }
-            Catch{
-                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Failed to rename device. Error: {0}" -f $_.Exception.Message) -Type Error
-                $syncHash.txtNewDeviceNameStatus.Text = 'Failed to rename device. Please see log for more details'
-                $syncHash.txtNewDeviceNameStatus.Foreground = 'Red'
-                $MoveableObject = $false
-            }
-            #attempt to move object in AD
-            If($MoveableObject -and $syncHash.chkNewDeviceNameMoveOU.IsChecked -and ($null -ne $syncHash.Data.ADComputer) -and ($null -ne $syncHash.txtOUPath.Text)){
+            $syncHash.Window.Dispatcher.Invoke([action]{
+                #attempt to rename object in Intune
                 Try{
-                    Move-ADObject -Identity $syncHash.Data.ADComputer.DistinguishedName -TargetPath $syncHash.txtOUPath.Text
+                    Invoke-IDMDeviceAction -DeviceID $syncHash.Data.SelectedDevice.id -Action Rename -NewDeviceName $syncHash.txtNewDeviceName.Text -ErrorAction Stop
+                    $syncHash.txtNewDeviceNameStatus.Text = 'Successfully renamed device.'
+                    $syncHash.txtNewDeviceNameStatus.Foreground = 'Green'
+                    $MoveableObject = $true
                 }
                 Catch{
-                    Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Failed to move AD object [{2}] to [{1}]. Error: {0}" -f $_.Exception.Message,$syncHash.txtOUPath.Text,$syncHash.Data.ADComputer.Name) -Type Error
-                    $syncHash.txtNewDeviceNameStatus.Text = 'Failed to move device. Please see log for more details'
+                    Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Failed to rename device. Error: {0}" -f $_.Exception.Message) -Type Error
+                    $syncHash.txtNewDeviceNameStatus.Text = 'Failed to rename device. Please see log for more details'
                     $syncHash.txtNewDeviceNameStatus.Foreground = 'Red'
+                    $MoveableObject = $false
                 }
-            }
+                #attempt to move object in AD
+                If($MoveableObject -and $syncHash.chkNewDeviceNameMoveOU.IsChecked -and ($null -ne $syncHash.Data.ADComputer) -and ($null -ne $syncHash.txtOUPath.Text)){
+                    Try{
+                        Move-ADObject -Identity $syncHash.Data.ADComputer.DistinguishedName -TargetPath $syncHash.txtOUPath.Text
+                    }
+                    Catch{
+                        Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Failed to move AD object [{2}] to [{1}]. Error: {0}" -f $_.Exception.Message,$syncHash.txtOUPath.Text,$syncHash.Data.ADComputer.Name) -Type Error
+                        $syncHash.txtNewDeviceNameStatus.Text = 'Failed to move device. Please see log for more details'
+                        $syncHash.txtNewDeviceNameStatus.Foreground = 'Red'
+                    }
+                }
+            })
         })
+
         #Allow UI to be dragged around screen
         $syncHash.Window.Add_MouseLeftButtonDown( {
             $syncHash.Window.DragMove()
@@ -1514,7 +1543,7 @@ Function Show-IDMWindow
 ##* MAIN
 ##*=============================================
 #Call UI and store it in same variable as runspace ($syncHash); allows easier troubleshooting
-$global:syncHash = Show-IDMWindow -XamlFile $XAMLFilePath -StylePath $StylePath -FunctionPath $FunctionPath -Properties $ParamProps
+$global:syncHash = Show-IDMWindow -XamlFile $XAMLFilePath -StylePath $StylePath -FunctionPath $FunctionPath -Properties $ParamProps -Wait
 #Show properties UI took in
 $global:syncHash.Properties
 #show data out

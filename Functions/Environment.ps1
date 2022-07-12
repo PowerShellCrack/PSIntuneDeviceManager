@@ -104,9 +104,7 @@ function Test-RSATModule {
 function Test-CMModule {
     #https://docs.microsoft.com/en-us/powershell/sccm/overview?view=sccm-ps
     param(
-	    [string]$CMSite,
-	    [string]$CMServer,
-	    [switch]$PassThru
+	    [string]$CMSite
 	)
     $CMPath = 'C:\Program Files (x86)\Microsoft Endpoint Manager\AdminConsole\bin'
 
@@ -118,7 +116,7 @@ function Test-CMModule {
     $CM = Get-Module -Name ConfigurationManager
     #Get-Command -module ActiveDirectory
     If ($CM) {
-        If($PassThru){
+        If($CMSite){
             Try{
                 Set-Location "$CMSite`:"
                 #New-PSDrive -Name $CMSite `

@@ -764,7 +764,9 @@ Function Remove-IDMDeviceRecords{
         [Parameter(ParameterSetName='Individual')]
         [switch]$Autopilot,
         [Parameter(ParameterSetName='Individual')]
-        [switch]$ConfigMgr
+        [switch]$ConfigMgr,
+        [Parameter(Mandatory=$false)]
+        $AuthToken = $Global:AuthToken
     )
 
     Set-Location $env:SystemDrive
@@ -791,24 +793,6 @@ Function Remove-IDMDeviceRecords{
         }
         Catch
         {
-            Write-host "$($_.Exception.Message)" -ForegroundColor Red
-            Return
-        }
-    }
-
-    # Authenticate with Azure
-    If ($PSBoundParameters.ContainsKey("AAD") -or $PSBoundParameters.ContainsKey("Intune") -or $PSBoundParameters.ContainsKey("Autopilot") -or $PSBoundParameters.ContainsKey("All"))
-    {
-        Try
-        {
-            Write-Host "Authenticating with MS Graph and Azure AD…" -NoNewline
-            $intuneId = Connect-MSGraph -ErrorAction Stop
-            $aadId = Connect-AzureAD -AccountId $intuneId.UPN -ErrorAction Stop
-            Write-host "Success" -ForegroundColor Green
-        }
-        Catch
-        {
-            Write-host "Error!" -ForegroundColor Red
             Write-host "$($_.Exception.Message)" -ForegroundColor Red
             Return
         }
@@ -857,14 +841,14 @@ Function Remove-IDMDeviceRecords{
             Write-host "Retrieving " -NoNewline
             Write-host "Azure AD " -ForegroundColor Yellow -NoNewline
             Write-host "device record/s…" -NoNewline
-            [array]$AzureADDevices = Get-AzureADDevice -SearchString $ComputerName -All:$true -ErrorAction Stop
+            [array]$AzureADDevices = Get-IDMAzureDevices -Filter $ComputerName -AuthToken $AuthToken -ErrorAction Stop
             If ($AzureADDevices.Count -ge 1)
             {
                 Write-Host "Success" -ForegroundColor Green
                 Foreach ($AzureADDevice in $AzureADDevices)
                 {
                     Write-host "   Deleting DisplayName: $($AzureADDevice.DisplayName)  |  ObjectId: $($AzureADDevice.ObjectId)  |  DeviceId: $($AzureADDevice.DeviceId) …" -NoNewline
-                    Remove-AzureADDevice -ObjectId $AzureADDevice.ObjectId -ErrorAction Stop
+                    Remove-IDMAzureDevices -ObjectId $AzureADDevice.ObjectId -ErrorAction Stop
                     Write-host "Success" -ForegroundColor Green
                 }
             }
@@ -977,145 +961,6 @@ Function Remove-IDMDeviceRecords{
 
 }
 
-
-
-
-Function Get-IDMDevicePending{
-    <#
-
-    .SYNOPSIS
-        Get-AADPendingDevices PowerShell script.
-
-    .DESCRIPTION
-       Get-AzurePendingDevices is a PowerShell script helps to get all PENDING devices in Azure AD tenant.
-
-    .NOTES
-        Mohammad Zmaili
-
-    .PARAMETER Passthru
-        Displays PENDING devices on PowerShell screen.
-
-    .PARAMETER SavedCreds
-        Uses the saved credentials option to connect to MSOnline.
-        You can use any normal CLOUD only user who is having read permission to verify the devices.
-        But you have to use a global admin when using clean parameter.
-        Notes: - This parameter is very helpful when automating/running the script in task scheduler.
-            - Update the saved credentials under the section "Update Saved credentials".
-
-    .PARAMETER CleanDevices
-        Remove PENDING devices.
-
-
-    .PARAMETER ExcelReport
-        Generates Excel report and saves the result into it, if this switch not selected script will generate a CSV report.
-
-
-    .EXAMPLE
-        Get-AADPendingDevices
-        Retreives all PENDING devices in your tenant, and generates a CSV file with the output.
-
-
-    .EXAMPLE
-        Get-AzurePendingDevices -CleanDevices -OnScreenReport
-        Retreives all PENDING devices in your tenant, and generates a CSV file with the output, and displays the result on PowerShell screen.
-
-
-    .EXAMPLE
-        Get-AADPendingDevices -CleanDevices
-        Deletes PENDING devices from the tenant
-
-
-    .EXAMPLE
-        Get-AADPendingDevices -SavedCreds
-        Retreives all PENDING devices in your tenant, uses the saved credentials to access MSOnline.
-        Note: You can automate running this script using task scheduler.
-
-
-    Script Output:
-    -----------
-
-    ===================================
-    |Azure AD Pending Devices Summary:|
-    ===================================
-    Number of affected devices: 7
-    #>
-
-    [cmdletbinding()]
-    param(
-        [Parameter(Mandatory=$false)]
-        [switch]$CleanDevices,
-
-        [Parameter(Mandatory=$false)]
-        [switch]$SavedCreds,
-
-        [Parameter(Mandatory=$false)]
-        [switch]$Passthru
-    )
-
-    #=========================
-    # Update Saved credentials
-    #=========================
-    $UserName = "user@domain.com"
-    $UserPass="PWD"
-    $UserPass=$UserPass|ConvertTo-SecureString -AsPlainText -Force
-    $UserCreds = New-Object System.Management.Automation.PsCredential($userName,$UserPass)
-
-    '==================================================='
-    Write-Host '           Get Azure AD Pending Devices                          ' -ForegroundColor Green
-    '==================================================='
-    if ($SavedCreds){
-        Connect-MsolService -Credential $UserCreds -ErrorAction SilentlyContinue
-    }
-    else{
-        Connect-MsolService -ErrorAction SilentlyContinue
-    }
-    $rep=@()
-    $Devices=@()
-    $Devices= Get-MsolDevice -all -IncludeSystemManagedDevices
-    $DevCount = $Devices.Count
-    $DevNum=1
-    ForEach ($Device in $Devices){
-
-        $a="Checking device number " + $DevNum +" out of " + $DevCount + " devices in your tenant ..."
-        Write-Progress -Activity $a -PercentComplete (($DevNum*100)/$DevCount)
-        #if ($Device.AlternativeSecurityIds){
-        if ( ($Device.DeviceTrustType -eq 'Domain Joined') -and (-not([string]($Device.AlternativeSecurityIds)).StartsWith("X509:")) ){
-
-                $rep+=$Device
-        }
-        $DevNum+=1
-    }
-
-    $Date=("{0:s}" -f (get-date)).Split("T")[0] -replace "-", ""
-    $Time=("{0:s}" -f (get-date)).Split("T")[1] -replace ":", ""
-
-    if ($rep.Count -ge 1){
-        $rep | select Enabled, ObjectId, DeviceId, DisplayName, DeviceObjectVersion, DeviceOsType, DeviceOsVersion, `
-                    DeviceTrustType, DeviceTrustLevel, ApproximateLastLogonTimestamp, DirSyncEnabled, LastDirSyncTime, `
-                    @{Name='Registeredowners';Expression={[string]::join(";", ($_.Registeredowners))}}, `
-                    @{Name='DevicePhysicalIds';Expression={[string]::join(";", ($_.DevicePhysicalIds))}}, `
-                    @{Name='AlternativeSecurityIds';Expression={[string]::join(";", ($_.AlternativeSecurityIds))}}
-
-        if ($CleanDevices){
-            $rep | Remove-MsolDevice -force
-        }
-        else{
-            $rep
-        }
-
-    }
-    else{
-
-    Write-Host "Task completed successfully." -ForegroundColor Yellow -BackgroundColor Black
-    Write-Host "There is no PENDING devices in your tenant" -ForegroundColor green -BackgroundColor Black
-
-    }
-
-
-    if ($Passthru) {
-        $rep | Out-GridView -Title "Hybrid Devices Health Check Report"
-    }
-}
 
 Function Get-IDMIntuneAssignments{
     Param(
