@@ -1226,7 +1226,7 @@ Function Get-IDMIntuneAssignments{
     return $ResourceAssignments
 }
 
-Function Set-IntuneResourceFriendlyName{
+Function Set-IDMResourceFriendlyName{
     Param(
         $Name,
         [AllowEmptyString()]
@@ -1247,7 +1247,7 @@ Function Set-IntuneResourceFriendlyName{
     return $FriendlyName
 }
 
-Function Set-IntuneResourceFriendlyType{
+Function Set-IDMResourceFriendlyType{
     Param(
         $Category,
         $ODataType

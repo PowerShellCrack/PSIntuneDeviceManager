@@ -181,7 +181,7 @@ function Get-MSGraphAuthToken{
 }
 
 #https://github.com/smcavinue/AdminSeanMc/blob/master/Graph%20Scripts/graph-RefreshAccessToken.ps1
-function Refresh-MSGraphAccessToken{
+function Update-IDMGraphAccessToken{
     <#
     .SYNOPSIS
     Refreshes an access token based on refresh token
@@ -225,3 +225,5 @@ $Refreshedtoken = (Invoke-RestMethod -Uri $apiUri -Method Post -ContentType 'app
 return $Refreshedtoken
 
 }
+
+

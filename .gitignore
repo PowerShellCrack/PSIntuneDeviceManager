@@ -2,6 +2,9 @@
 /Archive/*
 !/.vscode/
 /.vscode/*
+Intune.ps1
+Autopilot.ps1
+MSGraph.ps1
 *.code-workspace
 *.zip
 Tests.ps1

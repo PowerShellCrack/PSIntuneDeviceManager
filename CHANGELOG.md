@@ -1,5 +1,12 @@
 # Change log for IntuneDeviceManagerUI.ps1
 
+## 1.4.4- July 26, 2022
+
+- Added detection for Offline Autopilot profile deployments.
+- Removed Msgraph.ps1, Intune.ps1, Autopilot.ps1 and replaced with IDMCmdlet module
+- Change Device info to be read only instead of disabled; allows clipboard
+- Rearranged UI for Azure device to make easier read
+
 ## 1.4.3 - July 11, 2022
 
 - Created runspace pool for assignment data retrieval; faster by 2 minutes.

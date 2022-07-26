@@ -1,17 +1,34 @@
 <#
 .SYNOPSIS
-    Connects to Intune and AD tto manage devices
+    Connects to Intune and AD to manage devices
+
 .DESCRIPTION
+
 .NOTES
     Author		: Dick Tracy II <richard.tracy@microsoft.com>
-	Source	    :
-    Version		: 1.4.1
-MODULES REQUIRED:
-    Microsoft.Graph.Intune
-    Microsoft.Graph.Authentication
-    Microsoft.Graph.DeviceManagement.Administration
-    AzureAD
-    WindowsAutoPilotIntune
+    Source	    :
+    Version		: 1.4.4
+
+.EXAMPLE
+    .\IntuneDeviceManagerUI.ps1 -DevicePrefix 'DTOHAADJ'
+
+.EXAMPLE
+    .\IntuneDeviceManagerUI.ps1 -RenameEnablement
+
+.EXAMPLE
+    .\IntuneDeviceManagerUI.ps1 -DevicePlatform Android
+
+.EXAMPLE
+    .\IntuneDeviceManagerUI.ps1 -AppConnect -ApplicationId 'dd99ec13-a3c5-4703-b95f-794a2b559fb0' -TenantId '2ec9dcf0-b109-434a-8bcd-238a3bf0c6b2'
+
+.LINK
+    #modules needed:
+        Microsoft.Graph.Intune
+        Microsoft.Graph.Authentication
+        Microsoft.Graph.DeviceManagement.Administration
+        AzureAD
+        WindowsAutoPilotIntune
+        IDMCmdlets
 #>
 [cmdletbinding(DefaultParameterSetName='UserConnected')]
 param(
@@ -164,7 +181,7 @@ If($ChangeLogPath){
 }
 #check modules
 #$ModulesNeeded = @('Microsoft.Graph.Intune','Microsoft.Graph.Authentication','Microsoft.Graph.DeviceManagement.Administration','AzureAD','WindowsAutoPilotIntune','Microsoft.Graph.Identity.DirectoryManagement')
-$ModulesNeeded = @('Az.Accounts','Microsoft.Graph.Intune','Microsoft.Graph.Authentication','AzureAD')
+$ModulesNeeded = @('Az.Accounts','Microsoft.Graph.Intune','Microsoft.Graph.Authentication','AzureAD','WindowsAutopilotIntune','IDMCmdlets')
 
 $ParamProps = @{
     Name = $scriptName
@@ -268,10 +285,10 @@ Function Show-IDMWindow
         . "$FunctionPath\Logging.ps1"
         . "$FunctionPath\Environment.ps1"
         . "$FunctionPath\DeviceInfo.ps1"
-        . "$FunctionPath\MSgraph.ps1"
-        . "$FunctionPath\Intune.ps1"
+        #. "$FunctionPath\MSgraph.ps1"
+        #. "$FunctionPath\Intune.ps1"
+        #. "$FunctionPath\Autopilot.ps1"
         . "$FunctionPath\Runspace.ps1"
-        . "$FunctionPath\Autopilot.ps1"
         . "$FunctionPath\UIControls.ps1"
         # INNER  FUNCTIONS
         #=================================
@@ -484,8 +501,8 @@ Function Show-IDMWindow
             $syncHash.txtRSAT.text = 'No'
             $syncHash.btnADUserSync.IsEnabled = $false
         }
-        
-        
+
+
         # check if RSAT PowerShell Module is installed
         If(Test-CMModule){
             $syncHash.txtCMModule.text = 'Yes';$syncHash.txtCMModule.Foreground = 'Green'
@@ -497,7 +514,7 @@ Function Show-IDMWindow
             $syncHash.txtCMModule.text = 'No'
             $syncHash.btnCMSiteSync.IsEnabled = $False
         }
-        
+
         # Get PowerShell Version
         [hashtable]$envPSVersionTable = $PSVersionTable
         [version]$envPSVersion = $envPSVersionTable.PSVersion
@@ -813,7 +830,7 @@ Function Show-IDMWindow
                 }
 
                 Connect-MSGraphApp @AppConnectionDetails
-                $syncHash.Data.AuthToken = Connect-MSGraphAsAnApp @AppConnectionDetails
+                $syncHash.Data.AuthToken = Connect-IDMGraphApp @AppConnectionDetails
                 $syncHash.Data.ConnectedUPN = $syncHash.Properties.ApplicationId
                 Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Connected to MSGraph using appid: {0}" -f $syncHash.Properties.ApplicationId) -Type Start
             }
@@ -821,7 +838,7 @@ Function Show-IDMWindow
                 #minimize the UI to allow for login
                 $syncHash.Window.WindowState = 'Minimized'
                 $syncHash.Data.ConnectedUPN = (Connect-MSGraph -AdminConsent).UPN
-                $syncHash.Data.AuthToken = (Get-MSGraphAuthToken -User $syncHash.Data.ConnectedUPN)
+                $syncHash.Data.AuthToken = (Get-IDMGraphAuthToken -User $syncHash.Data.ConnectedUPN)
                 Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Connected to MSGraph using account: {0}" -f $syncHash.Data.ConnectedUPN) -Type Start
             }
 
@@ -980,9 +997,14 @@ Function Show-IDMWindow
                     $syncHash.chkDeviceMultiSession.IsChecked = $false
                 }
 
+                #https://docs.microsoft.com/en-us/graph/api/resources/intune-devices-managementagenttype?view=graph-rest-1.0
                 switch($syncHash.Data.SelectedDevice.managementAgent){
-                    'configurationManagerClientMdm' {$syncHash.txtDeviceMDM.Text = 'System Center Configuration Manager'}
-                    'Mdm' {$syncHash.txtDeviceMDM.Text = 'Microsoft Intune'}
+                    'configurationManagerClientMdm' {$syncHash.txtDeviceMDM.Text = 'MECM & MDM'}
+                    'configurationManagerClient' {$syncHash.txtDeviceMDM.Text = 'MECM'}
+                    'intuneClient' {$syncHash.txtDeviceMDM.Text = 'Intune MDM'}
+                    'Mdm' {$syncHash.txtDeviceMDM.Text = 'Intune MDM'}
+                    'jamf' {$syncHash.txtDeviceMDM.Text = 'Jamf MDM'}
+                    'googleCloudDevicePolicyController' {$syncHash.txtDeviceMDM.Text = 'Google CloudDPC.'}
                     default {$syncHash.txtDeviceMDM.Text = 'None'}
                 }
 
@@ -1004,10 +1026,16 @@ Function Show-IDMWindow
                 #determine if device has been autopiloted (look for ZTDID and profile type). Is there a better way???
                 If($syncHash.Data.SelectedDevice.physicalIds -match '\[ZTDID\]' -and $syncHash.Data.SelectedDevice.profileType -ne 'RegisteredDevice'){
                     $syncHash.lblDeviceAutopilotedStatus.Foreground = 'Black'
-                    $syncHash.chkDeviceAutopilotedStatus.IsChecked = $true
+                    $syncHash.txtDeviceAutopilotedStatus.Foreground = 'Blue'
+                    $syncHash.txtDeviceAutopilotedStatus.Text = 'Online Profile'
+                }ElseIf($syncHash.Data.SelectedDevice.enrollmentProfileName -like 'OfflineAutopilotprofile*'){
+                    $syncHash.lblDeviceAutopilotedStatus.Foreground = 'Black'
+                    $syncHash.txtDeviceAutopilotedStatus.Foreground = 'Black'
+                    $syncHash.txtDeviceAutopilotedStatus.Text = 'Offline JSON'
                 }Else{
                     $syncHash.lblDeviceAutopilotedStatus.Foreground = 'Gray'
-                    $syncHash.chkDeviceAutopilotedStatus.IsChecked = $false
+                    $syncHash.txtDeviceAutopilotedStatus.Foreground = 'Gray'
+                    $syncHash.txtDeviceAutopilotedStatus.Text = 'Not Performed'
                 }
 
                 #Display Assigned User

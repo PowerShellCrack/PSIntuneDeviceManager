@@ -1133,8 +1133,7 @@ Function Show-IDMAssignmentsWindow {
                     $Global:AssignmentList = Get-IDMIntuneAssignmentsInRunspace `
                                                         -Platform $syncHash.DeviceData.OperatingSystem `
                                                         -TargetSet @{devices=$syncHash.DeviceData.azureADObjectId;users=$syncHash.UserData.id} `
-                                                        -AuthToken $syncHash.AuthToken -IncludePolicySetInherits -Passthru #`
-                                                        #-ListObject $syncHash.lstDeviceAssignments
+                                                        -AuthToken $syncHash.AuthToken -IncludePolicySetInherits -Passthru
 
                     #Set global list so other elements can use it
                     $syncHash.AssignmentData = $Global:AssignmentList
@@ -1193,8 +1192,7 @@ Function Show-IDMAssignmentsWindow {
             $Global:AssignmentList = Get-IDMIntuneAssignmentsInRunspace `
                                                     -Platform $syncHash.DeviceData.OperatingSystem `
                                                     -TargetSet @{devices=$syncHash.DeviceData.azureADObjectId;users=$syncHash.UserData.id} `
-                                                    -AuthToken $syncHash.AuthToken -IncludePolicySetInherits -Passthru #`
-                                                    #-ListObject $syncHash.lstDeviceAssignments
+                                                    -AuthToken $syncHash.AuthToken -IncludePolicySetInherits
 
             #Set global list so other elements can use it
             $syncHash.AssignmentData = $Global:AssignmentList
@@ -1269,6 +1267,7 @@ Function Show-IDMAssignmentsWindow {
     return $Data
 
 }#end runspace
+
 
 
 <#

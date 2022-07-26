@@ -92,7 +92,7 @@ Function Get-IDMDeviceInRunspace{
     $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
         try {
             #$Runspace.GraphData.MDMDevices = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get -ErrorAction Stop).Value
-            $Runspace.GraphData.MDMDevices = Get-RestResponseInRunspacePool -Uri $uri -Headers $AuthToken -Passthru -ErrorAction Stop
+            $Runspace.GraphData.MDMDevices = Invoke-IDMGraphRequests -Uri $uri -Headers $AuthToken -Passthru -ErrorAction Stop
         }
         catch {
             Update-IDMProgress -Runspace $Runspace -PercentComplete 100 -StatusMsg ("Response content: {0}" -f $_.Exception.Response.StatusCode) -Color Red
@@ -234,7 +234,7 @@ Function Get-IDMAzureDevicesInRunspace{
         $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
             try {
                 #$Runspace.GraphData.AADDevices = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get -ErrorAction Stop).value
-                $Runspace.GraphData.AADDevices = Get-RestResponseInRunspacePool -Uri $uri -Headers $AuthToken -Passthru -ErrorAction Stop
+                $Runspace.GraphData.AADDevices = Invoke-IDMGraphRequests -Uri $uri -Headers $AuthToken -Passthru -ErrorAction Stop
             }
             catch {
                 Update-IDMProgress -Runspace $Runspace -PercentComplete 100 -StatusMsg ("Response content: {0}" -f $_.Exception.Response.StatusCode) -Color Red
@@ -354,7 +354,7 @@ Function Get-IDMIntuneAssignmentsInRunspace{
     #Add component URIs
     $UriResources += $PlatformComponents | %{ "https://graph.microsoft.com/$graphApiVersion/$($_)"}
 
-    $GraphRequests = $UriResources | Get-RestResponseInRunspacePool -Headers $AuthToken -Threads $UriResources.Count -Passthru
+    $GraphRequests = $UriResources | Invoke-IDMGraphRequests -Headers $AuthToken -Threads $UriResources.Count -Passthru
 
     If($PSBoundParameters.ContainsKey('ParentRunspace')){
         $ParentRunspace.Window.Dispatcher.Invoke("Normal",[action]{
@@ -391,21 +391,21 @@ Function Get-IDMIntuneAssignmentsInRunspace{
     #>
     $PlatformResources = ($GraphRequests | Where {$_.'@odata.type' -match ($PlatformType -join '|')}) |
                                             Select id,uri,
-                                                @{N='type';E={Set-IntuneResourceFriendlyType -Category (split-path $_.uri -leaf) -ODataType $_.'@odata.type'}},
-                                                @{N='name';E={Set-IntuneResourceFriendlyName -Name $_.displayName -LicenseType $_.licenseType -ODataType $_.'@odata.type'}},
+                                                @{N='type';E={Set-IDMResourceFriendlyType -Category (split-path $_.uri -leaf) -ODataType $_.'@odata.type'}},
+                                                @{N='name';E={Set-IDMResourceFriendlyName -Name $_.displayName -LicenseType $_.licenseType -ODataType $_.'@odata.type'}},
                                                 @{N='Assigned';E={If('isAssigned' -in ($_ | Get-Member -MemberType NoteProperty).Name){[boolean]$_.isAssigned}}}
 
     <#
     $PlatformResources[35]
     $PlatformResources[418]
-    $PlatformResources = $GraphRequests| Select id,@{N='type';E={Set-IntuneResourceFriendlyType -Category (split-path $_.uri -leaf) -ODataType $_.'@odata.type'}}, @{N='name';E={If($_.licenseType){$_.displayName + ' (' + $_.licenseType + ')'}Else{$_.displayName}}},@{N='Assigned';E={If('isAssigned' -in ($_ | Get-Member -MemberType NoteProperty).Name){[boolean]$_.isAssigned}}} | ft
-    $PlatformResources = $GraphRequests| Select id,uri,@{N='type';E={Set-IntuneResourceFriendlyType -Category (split-path $_.uri -leaf) -ODataType $_.'@odata.type'}}, @{N='name';E={If($_.licenseType){$_.displayName + ' (' + $_.licenseType + ')'}Else{$_.displayName}}},'@odata.type',@{N='Assigned';E={If('isAssigned' -in ($_ | Get-Member -MemberType NoteProperty).Name){[boolean]$_.isAssigned}}} | ft
+    $PlatformResources = $GraphRequests| Select id,@{N='type';E={Set-IDMResourceFriendlyType -Category (split-path $_.uri -leaf) -ODataType $_.'@odata.type'}}, @{N='name';E={If($_.licenseType){$_.displayName + ' (' + $_.licenseType + ')'}Else{$_.displayName}}},@{N='Assigned';E={If('isAssigned' -in ($_ | Get-Member -MemberType NoteProperty).Name){[boolean]$_.isAssigned}}} | ft
+    $PlatformResources = $GraphRequests| Select id,uri,@{N='type';E={Set-IDMResourceFriendlyType -Category (split-path $_.uri -leaf) -ODataType $_.'@odata.type'}}, @{N='name';E={If($_.licenseType){$_.displayName + ' (' + $_.licenseType + ')'}Else{$_.displayName}}},'@odata.type',@{N='Assigned';E={If('isAssigned' -in ($_ | Get-Member -MemberType NoteProperty).Name){[boolean]$_.isAssigned}}} | ft
     $PlatformResources.type | Select -unique
     $PlatformResources | Where type -eq 'Policy Set'
     $PlatformResources.type
     #>
     #get Assignments of all resource suing multithreading
-    $ResourceAssignments = $PlatformResources | %{ $_.uri + '/' + $_.id + '/assignments'} | Get-RestResponseInRunspacePool -Headers $AuthToken -Passthru
+    $ResourceAssignments = $PlatformResources | %{ $_.uri + '/' + $_.id + '/assignments'} | Invoke-IDMGraphRequests -Headers $AuthToken -Passthru
     #$ResourceAssignments.count
 
 
@@ -550,7 +550,7 @@ Function Get-IDMIntuneAssignmentsInRunspace{
 }
 
 
-Function Get-RestResponseInRunspacePool{
+Function Invoke-IDMGraphRequests{
     <#
     .SYNOPSIS
      Invoke Rest method in multithread
@@ -704,7 +704,7 @@ Function Get-RestResponseInRunspacePool{
 }
 <#TEST
     $Uri = 'https://graph.microsoft.com/beta/deviceManagement/managedDevices'
-    Get-RestResponseInRunspacePool -Uri $Uri -Headers $AuthToken -Passthru
+    Invoke-IDMGraphRequests -Uri $Uri -Headers $AuthToken -Passthru
 
 
 $Uri = @(
@@ -722,7 +722,7 @@ $Uri = @(
     'https://graph.microsoft.com/beta/deviceAppManagement/mobileApps'
     'https://graph.microsoft.com/beta/deviceAppManagement/policysets'
 )
-$Responses = $Uri | Get-RestResponseInRunspacePool -Headers $AuthToken -Threads $Uri.count -Passthru
+$Responses = $Uri | Invoke-IDMGraphRequests -Headers $AuthToken -Threads $Uri.count -Passthru
 $Responses[0]
 
 Measure-command {
