@@ -206,7 +206,7 @@ $ParamProps = @{
 ##*=============================================
 ##* UI FUNCTION
 ##*=============================================
-Function Show-IDMWindow
+Function Show-UIMainWindow
 {
     <#
     .SYNOPSIS
@@ -300,7 +300,7 @@ Function Show-IDMWindow
 
 
         #Closes UI objects and exits (within runspace)
-        Function Close-IDMWindow
+        Function Close-UIMainWindow
         {
             if ($syncHash.hadCritError) { Write-Host -Message "Background thread had a critical error" -ForegroundColor red }
             #if runspace has not errored Dispose the UI
@@ -1093,13 +1093,14 @@ Function Show-IDMWindow
                     $syncHash.txtDeviceStatus.Visibility='Hidden'
                 }
             }
+            Update-UIProgress -Runspace $synchash -StatusMsg ("You selected device [{0}]`nThe user assigned is [{1}]" -f $syncHash.Data.SelectedDevice.deviceName,$syncHash.Data.AssignedUser.userPrincipalName) -PercentComplete 100 -Color (Get-UIRandomColor)
         })
 
         # Refresh Device List
         #========================
         $syncHash.btnRefreshList.Add_Click({
             $this.IsEnabled = $false
-            Update-UIProgress -Runspace $synchash -StatusMsg ('Refreshing managed [{0}] device list...' -f $syncHash.properties.DevicePlatform) -Indeterminate
+            Update-UIProgress -Runspace $synchash -StatusMsg ('Refreshing managed [{0}] device list...' -f $syncHash.properties.DevicePlatform) -Indeterminate -Color Blue
 
             #clear current list
             $syncHash.btnRefreshList.Dispatcher.Invoke("Normal",[action]{
@@ -1205,9 +1206,10 @@ Function Show-IDMWindow
                 }
                 Else{
                     $syncHash.txtStatus.Foreground = 'Red'
-                    $syncHash.txtStatus.Text = 'You must select a device first'
+                    $syncHash.txtStatus.Text = 'You must select a device first from the Device Tab'
                 }
             })
+            Update-UIProgress -Runspace $synchash -StatusMsg ("Hardware information retrieved successfully for device [{0}]!" -f $syncHash.Data.SelectedDevice.deviceName) -PercentComplete 100
             $this.IsEnabled = $true
         })
 
@@ -1500,7 +1502,7 @@ Function Show-IDMWindow
         })
         #action for exit button
         $syncHash.btnExit.Add_Click({
-            Close-IDMWindow
+            Close-UIMainWindow
         })
 
 
@@ -1535,7 +1537,7 @@ Function Show-IDMWindow
 
         #Add smooth closing for Window
         $syncHash.Window.Add_Loaded({ $syncHash.isLoaded = $True })
-        $syncHash.Window.Add_Closing({ $syncHash.isClosing = $True; Close-IDMWindow })
+        $syncHash.Window.Add_Closing({ $syncHash.isClosing = $True; Close-UIMainWindow })
         $syncHash.Window.Add_Closed({ $syncHash.isClosed = $True })
         #make sure this display on top of every window
         $syncHash.Window.Topmost = $true
@@ -1576,7 +1578,7 @@ Function Show-IDMWindow
 ##* MAIN
 ##*=============================================
 #Call UI and store it in same variable as runspace ($syncHash); allows easier troubleshooting
-$global:syncHash = Show-IDMWindow -XamlFile $XAMLFilePath -StylePath $StylePath -FunctionPath $FunctionPath -Properties $ParamProps -Wait
+$global:syncHash = Show-UIMainWindow -XamlFile $XAMLFilePath -StylePath $StylePath -FunctionPath $FunctionPath -Properties $ParamProps -Wait
 #Show properties UI took in
 $global:syncHash.Properties
 #show data out

@@ -373,6 +373,11 @@ Function Update-UIProgress{
     }
 }
 
+Function Get-UIRandomColor{
+    $color = "#{0:X6}" -f (Get-Random -Maximum 0xFFFFFF)
+    return $color
+}
+
 Function Get-UIElement {
     [CmdletBinding()]
     param(
