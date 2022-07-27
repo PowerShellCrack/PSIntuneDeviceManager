@@ -1269,23 +1269,3 @@ Function Show-UIAssignmentsWindow {
     return $Data
 
 }#end runspace
-
-
-
-<#
-TESTS
-.\IntuneDeviceManagerUI.ps1
-. .\Functions\UIControls.ps1
-. .\Functions\Runspace.ps1
-$Global:AssignmentUI = Show-UIAssignmentsWindow `
-    -DeviceData $syncHash.Data.SelectedDevice `
-    -DeviceAssignments $syncHash.Data.DeviceAssignments `
-    -UserData $syncHash.Data.AssignedUser `
-    -UserAssignments $syncHash.Data.UserAssignments `
-    -AuthToken $syncHash.Data.AuthToken -LoadOnStartup
-
-$Global:AssignmentUI = Show-UIAssignmentsWindow -SupportScripts "$($syncHash.FunctionPath)\Intune.ps1" -DeviceData $syncHash.Data.SelectedDevice -UserData $syncHash.Data.AssignedUser -AuthToken $syncHash.Data.AuthToken
-$Global:AssignmentUI = Show-UIAssignmentsWindow -SupportScripts "$($syncHash.FunctionPath)\Intune.ps1" -AuthToken $syncHash.Data.AuthToken
-$Global:AssignmentUI = Show-UIAssignmentsWindow -SupportScripts "$($syncHash.FunctionPath)\Intune.ps1" -UPN "leeg@DTOLAB.LTD" -AuthToken $syncHash.Data.AuthToken
-Show-UIAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -UserData $syncHash.Data.AssignedUser -SupportScripts @(".\Functions\UIControls.ps1",".\Functions\Runspace.ps1") -AuthToken $syncHash.Data.AuthToken
-#>
