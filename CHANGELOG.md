@@ -1,8 +1,15 @@
 # Change log for IntuneDeviceManagerUI.ps1
 
-## 1.4.4- July 26, 2022
+## 1.4.5 - July 27, 2022
 
-- Added detection for Offline Autopilot profile deployments.
+- Fixed issue where EAS devices scan is need; issue with runspace scripts
+- Removed Invoke-Graphrequests from Runspace.ps1; now part of IDMCmdlets module
+- Fixed Device Assignments script to load on startup
+- Changed functions names in UI and Runspace; doesn't conflict with IDMCmdlets module
+
+## 1.4.4 - July 26, 2022
+
+- Added detection for Offline Autopilot profile deployments; rearranged layout
 - Removed Msgraph.ps1, Intune.ps1, Autopilot.ps1 and replaced with IDMCmdlet module
 - Change Device info to be read only instead of disabled; allows clipboard
 - Rearranged UI for Azure device to make easier read

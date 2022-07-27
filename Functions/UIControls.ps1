@@ -321,7 +321,7 @@ function Write-UIOutput {
 }
 
 
-Function Update-IDMProgress{
+Function Update-UIProgress{
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)]
@@ -489,7 +489,7 @@ Function Add-UIList{
         $i++
         If($PSBoundParameters.ContainsKey('Runspace')){
             If($Identifier){
-                Update-IDMProgress -Runspace $Runspace -PercentComplete ($i/$ItemsList.count * 100) -StatusMsg ("[{0} of {1}] :: Adding [{2}] to list..." -f $i,$ItemsList.count,$item.$Identifier)
+                Update-UIProgress -Runspace $Runspace -PercentComplete ($i/$ItemsList.count * 100) -StatusMsg ("[{0} of {1}] :: Adding [{2}] to list..." -f $i,$ItemsList.count,$item.$Identifier)
                 Write-UIOutput -Runspace $Runspace -UIObject $Runspace.Logging -Message ("Adding item to [{1}] {2}: {0}" -f $item.$Identifier,$Object.Name,$PSCmdlet.ParameterSetName) -Type Info
 
                 $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
@@ -497,7 +497,7 @@ Function Add-UIList{
                 })
             }
             Else{
-                Update-IDMProgress -Runspace $Runspace -PercentComplete ($i/$ItemsList.count * 100) -StatusMsg ("[{0} of {1}] :: Adding [{2}] to list..." -f $i,$ItemsList.count,$item)
+                Update-UIProgress -Runspace $Runspace -PercentComplete ($i/$ItemsList.count * 100) -StatusMsg ("[{0} of {1}] :: Adding [{2}] to list..." -f $i,$ItemsList.count,$item)
                 Write-UIOutput -Runspace $Runspace -UIObject $Runspace.Logging -Message ("Adding item to [{1}] {2}: {0}" -f $item,$Object.Name,$PSCmdlet.ParameterSetName) -Type Info
                 $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
                     $Object.Items.Add($item) | Out-Null
@@ -516,7 +516,7 @@ Function Add-UIList{
     }
 
     If($PSBoundParameters.ContainsKey('Runspace')){
-        Update-IDMProgress -Runspace $Runspace -PercentComplete 100 -StatusMsg ("Added {0} items to list" -f $ItemsList.count) -Color Green
+        Update-UIProgress -Runspace $Runspace -PercentComplete 100 -StatusMsg ("Added {0} items to list" -f $ItemsList.count) -Color Green
     }
 
     If($Passthru){
@@ -753,7 +753,7 @@ Function Open-AppSecretPrompt {
 }#end runspace
 
 
-Function Show-IDMAssignmentsWindow {
+Function Show-UIAssignmentsWindow {
     [CmdletBinding(DefaultParameterSetName='PreLoadId')]
     Param(
         [Parameter(Mandatory=$false,ParameterSetName='PreLoadId')]
@@ -886,6 +886,8 @@ Function Show-IDMAssignmentsWindow {
         #===========================================================================
         $xaml.SelectNodes("//*[@Name]") | %{ $syncHash."$($_.Name)" = $syncHash.Window.FindName($_.Name)}
 
+        Import-Module IDMCmdlets
+
         #load scripts
         Foreach($Script in $syncHash.Scripts){
             . $Script
@@ -901,7 +903,7 @@ Function Show-IDMAssignmentsWindow {
 
         # INNER  FUNCTIONS
         #Closes UI objects and exits (within runspace)
-        Function Close-IDMAssignmentsWindow
+        Function Close-UIAssignmentsWindow
         {
             if ($syncHash.hadCritError) { Write-Host -Message "Background thread had a critical error" -ForegroundColor red }
             #if runspace has not errored Dispose the UI
@@ -1109,7 +1111,7 @@ Function Show-IDMAssignmentsWindow {
 
             $syncHash.lstDeviceAssignments.ItemsSource = $syncHash.AssignmentData
             #update Prog
-            Update-IDMProgress -Runspace $syncHash -PercentComplete 100 -Color Green
+            Update-UIProgress -Runspace $syncHash -PercentComplete 100 -Color Green
             #disable button
             $syncHash.btnReset.IsEnabled = $false
         })
@@ -1118,22 +1120,22 @@ Function Show-IDMAssignmentsWindow {
             # disable this button to prevent multiple clicks.
             $this.IsEnabled = $false
             $syncHash.lstDeviceAssignments.ItemsSource.Clear()
-            Update-IDMProgress -Runspace $syncHash -StatusMsg ("Please wait while loading device and user assignment data, this can take a while...") -Indeterminate
+            Update-UIProgress -Runspace $syncHash -StatusMsg ("Please wait while loading device and user assignment data, this can take a while...") -Indeterminate
 
             $syncHash.Window.Dispatcher.Invoke("Normal",[action]{
 
-                #$syncHash.DeviceData = Get-IDMDevice -Filter $syncHash.txtDeviceName.Text -AuthToken $syncHash.AuthToken -IncludeEAS -Expand
-                If($syncHash.DeviceData = Get-IDMDevice -Filter $syncHash.txtDeviceName.Text -AuthToken $syncHash.AuthToken -IncludeEAS -Expand)
+                #$syncHash.DeviceData = Get-IDMDevice -Filter $syncHash.txtDeviceName.Text -AuthToken $syncHash.AuthToken -Expand
+                If($syncHash.DeviceData = Get-IDMDevice -Filter $syncHash.txtDeviceName.Text -AuthToken $syncHash.AuthToken -Expand)
                 {
                     If([string]::IsNullOrEmpty($syncHash.txtAssignedUPN.Text)){
                         $syncHash.txtAssignedUPN.Text = $syncHash.DeviceData.userPrincipalName
                     }
                     $syncHash.UserData = Get-IDMDeviceAADUser -UPN $syncHash.txtAssignedUPN.Text
 
-                    $Global:AssignmentList = Get-IDMIntuneAssignmentsInRunspace `
+                    $Global:AssignmentList = Get-IDMIntuneAssignments `
                                                         -Platform $syncHash.DeviceData.OperatingSystem `
                                                         -TargetSet @{devices=$syncHash.DeviceData.azureADObjectId;users=$syncHash.UserData.id} `
-                                                        -AuthToken $syncHash.AuthToken -IncludePolicySetInherits -Passthru
+                                                        -AuthToken $syncHash.AuthToken -IncludePolicySetInherits
 
                     #Set global list so other elements can use it
                     $syncHash.AssignmentData = $Global:AssignmentList
@@ -1153,10 +1155,10 @@ Function Show-IDMAssignmentsWindow {
 
             If($syncHash.DeviceData){
                 #update Prog
-                Update-IDMProgress -Runspace $syncHash -PercentComplete 100 -StatusMsg ('Found {0} assignments for user [{1}] and device [{2}]' -f $syncHash.AssignmentData.count,$syncHash.txtAssignedUPN.Text,$syncHash.txtDeviceName.Text) -Color Green
+                Update-UIProgress -Runspace $syncHash -PercentComplete 100 -StatusMsg ('Found {0} assignments for user [{1}] and device [{2}]' -f $syncHash.AssignmentData.count,$syncHash.txtAssignedUPN.Text,$syncHash.txtDeviceName.Text) -Color Green
             }
             Else{
-                Update-IDMProgress -Runspace $syncHash -PercentComplete 100 -StatusMsg ('Unable to find device named [{1}]. Type in new name and try again.' -f $syncHash.txtDeviceName.Text) -Color Red
+                Update-UIProgress -Runspace $syncHash -PercentComplete 100 -StatusMsg ('Unable to find device named [{1}]. Type in new name and try again.' -f $syncHash.txtDeviceName.Text) -Color Red
                 $Global:AssignmentList = $null
                 $syncHash.AssignmentData = $Null
                 $syncHash.txtDeviceName.Text = $Null
@@ -1178,7 +1180,7 @@ Function Show-IDMAssignmentsWindow {
         })
 
         $syncHash.btnExit.Add_Click({
-            Close-IDMAssignmentsWindow
+            Close-UIAssignmentsWindow
         })
 
         #Allow UI to be dragged around screen
@@ -1189,7 +1191,7 @@ Function Show-IDMAssignmentsWindow {
         If($syncHash.LoadOnStartup){
             $syncHash.btnAssignments.IsEnabled = $false
 
-            $Global:AssignmentList = Get-IDMIntuneAssignmentsInRunspace `
+            $Global:AssignmentList = Get-IDMIntuneAssignments `
                                                     -Platform $syncHash.DeviceData.OperatingSystem `
                                                     -TargetSet @{devices=$syncHash.DeviceData.azureADObjectId;users=$syncHash.UserData.id} `
                                                     -AuthToken $syncHash.AuthToken -IncludePolicySetInherits
@@ -1207,7 +1209,7 @@ Function Show-IDMAssignmentsWindow {
             #update list view
             $syncHash.lstDeviceAssignments.ItemsSource = $syncHash.AssignmentData
 
-            Update-IDMProgress -Runspace $syncHash -PercentComplete 100 -StatusMsg ('Found {0} assignments for user [{1}] and device [{2}]' -f $syncHash.AssignmentData.count,$syncHash.txtAssignedUPN.Text,$syncHash.txtDeviceName.Text) -Color Green
+            Update-UIProgress -Runspace $syncHash -PercentComplete 100 -StatusMsg ('Found {0} assignments for user [{1}] and device [{2}]' -f $syncHash.AssignmentData.count,$syncHash.txtAssignedUPN.Text,$syncHash.txtDeviceName.Text) -Color Green
         }
 
         # Before the UI is displayed
@@ -1230,7 +1232,7 @@ Function Show-IDMAssignmentsWindow {
 
         #Add smooth closing for Window
         $syncHash.Window.Add_Loaded({ $syncHash.isLoaded = $True })
-        $syncHash.Window.Add_Closing({ $syncHash.isClosing = $True; Close-IDMAssignmentsWindow })
+        $syncHash.Window.Add_Closing({ $syncHash.isClosing = $True; Close-UIAssignmentsWindow })
         $syncHash.Window.Add_Closed({ $syncHash.isClosed = $True })
 
         #make sure this display on top of every window
@@ -1274,9 +1276,16 @@ Function Show-IDMAssignmentsWindow {
 TESTS
 .\IntuneDeviceManagerUI.ps1
 . .\Functions\UIControls.ps1
-$Global:AssignmentUI = Show-IDMAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -DeviceAssignments $syncHash.Data.DeviceAssignments -UserData $syncHash.Data.AssignedUser -UserAssignments $syncHash.Data.UserAssignments -Preload
-$Global:AssignmentUI = Show-IDMAssignmentsWindow -SupportScripts "$($syncHash.FunctionPath)\Intune.ps1" -DeviceData $syncHash.Data.SelectedDevice -UserData $syncHash.Data.AssignedUser -AuthToken $syncHash.Data.AuthToken
-$Global:AssignmentUI = Show-IDMAssignmentsWindow -SupportScripts "$($syncHash.FunctionPath)\Intune.ps1" -AuthToken $syncHash.Data.AuthToken
-$Global:AssignmentUI = Show-IDMAssignmentsWindow -SupportScripts "$($syncHash.FunctionPath)\Intune.ps1" -UPN "leeg@DTOLAB.LTD" -AuthToken $syncHash.Data.AuthToken
-Show-IDMAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -UserData $syncHash.Data.AssignedUser -SupportScripts @("$FunctionPath\Intune.ps1","$FunctionPath\Runspace.ps1") -AuthToken $syncHash.Data.AuthToken
+. .\Functions\Runspace.ps1
+$Global:AssignmentUI = Show-UIAssignmentsWindow `
+    -DeviceData $syncHash.Data.SelectedDevice `
+    -DeviceAssignments $syncHash.Data.DeviceAssignments `
+    -UserData $syncHash.Data.AssignedUser `
+    -UserAssignments $syncHash.Data.UserAssignments `
+    -AuthToken $syncHash.Data.AuthToken -LoadOnStartup
+
+$Global:AssignmentUI = Show-UIAssignmentsWindow -SupportScripts "$($syncHash.FunctionPath)\Intune.ps1" -DeviceData $syncHash.Data.SelectedDevice -UserData $syncHash.Data.AssignedUser -AuthToken $syncHash.Data.AuthToken
+$Global:AssignmentUI = Show-UIAssignmentsWindow -SupportScripts "$($syncHash.FunctionPath)\Intune.ps1" -AuthToken $syncHash.Data.AuthToken
+$Global:AssignmentUI = Show-UIAssignmentsWindow -SupportScripts "$($syncHash.FunctionPath)\Intune.ps1" -UPN "leeg@DTOLAB.LTD" -AuthToken $syncHash.Data.AuthToken
+Show-UIAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -UserData $syncHash.Data.AssignedUser -SupportScripts @(".\Functions\UIControls.ps1",".\Functions\Runspace.ps1") -AuthToken $syncHash.Data.AuthToken
 #>

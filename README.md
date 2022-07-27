@@ -5,6 +5,14 @@ a UI to manage Intune devices, that may be more difficult to do within portal.
 
 **NEW** Revampled _Hybrid Device Renamer UI_ to _Intune Device Manager UI_; built to allow more management or Intune devices besides just renaming devices.
 
+## Required Modules
+- Az.Accounts
+- Microsoft.Graph.Intune
+- Microsoft.Graph.Authentication
+- AzureAD
+- WindowsAutopilotIntune
+- IDMCmdlets
+
 ## Here is how you use it:
 
 
@@ -70,12 +78,12 @@ The script will check for prerequisites:
 
 if it finds a missing one, it will prompt to install them…so if it’s not ran as privilege administrator; it will install under user context. You will see them as "no" in red at the bottom status bar of the UI
 
-![Install Module](/.images/IDMWindow_Installmodule.jpg)
+![Install Module](/.images/UIWindow_Installmodule.jpg)
 
 > Once all prereqs are installed and everything shows green in the status bar (besides MSGraph Connected), you can continue. If not restart app after install
 
 Once the UI is launched, here are the steps to perform:
-![Launch](/.images/IDMWindow_Initial.jpg)
+![Launch](/.images/UIWindow_Initial.jpg)
 
 1. Click the button:  Connect to Intune (MSGraph)
 
@@ -85,20 +93,20 @@ Once the UI is launched, here are the steps to perform:
 
 > If you created a application principal account, and use -AppConnect parameter, the prompt is slightly different
 
-![AppConnect](/.images/IDMWindow_AppConnect.jpg)
+![AppConnect](/.images/UIWindow_AppConnect.jpg)
 
 2.	Once its connected, it will immediately start pulling Windows AAD devices into the list.
     a.	This is pre-configured to filter anything other than Windows.
 
 > NOTE: this may take a bit, depending on device count. The UI may look like its not responding (it is not a multithreaded UI...yet).
 
-![Connect](/.images/IDMWindow_Connected.jpg)
+![Connect](/.images/UIWindow_Connected.jpg)
 
 3.	You can search the device in the search window (it will filter as you type).
 
 4.	Once you select a device, the script will grab the detailed device and user information from Azure AD.
 
-![Selected](/.images/IDMWindow_SelectedDevice.jpg)
+![Selected](/.images/UIWindow_SelectedDevice.jpg)
 
 ## For Rename Operations
 
@@ -130,7 +138,7 @@ Once the UI is launched, here are the steps to perform:
 3. Click Get Assignments
 
 > NOTE: this may take a while to load, depending on objects in Intune and Azure. The UI may look like its not responding (its not a multithreaded UI...yet). Once complete though a screen will come up:
-![Selected](/.images/IDMWindow_Assignments.jpg)
+![Selected](/.images/UIWindow_Assignments.jpg)
 
 4. This list can further be searched or filtered. It can also be exported to CSV
 
@@ -138,7 +146,7 @@ Once the UI is launched, here are the steps to perform:
 
 The UI does output performed clicks in the logging tab. Not everything is logged ***
 
-![Selected](/.images/IDMWindow_logging.jpg)
+![Selected](/.images/UIWindow_logging.jpg)
 
 ## Output
 

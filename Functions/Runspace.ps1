@@ -1,5 +1,5 @@
 
-Function Get-IDMDeviceInRunspace{
+Function Get-RunspaceIntuneDevices{
 
     <#
     .SYNOPSIS
@@ -7,13 +7,13 @@ Function Get-IDMDeviceInRunspace{
     .DESCRIPTION
     The function connects to the Graph API Interface and gets any Intune Managed Device
     .EXAMPLE
-    Get-IDMDeviceInRunspace
+    Get-RunspaceIntuneDevices
     Returns all managed devices but excludes EAS devices registered within the Intune Service
     .EXAMPLE
-    Get-IDMDeviceInRunspace -IncludeEAS
+    Get-RunspaceIntuneDevices -IncludeEAS
     Returns all managed devices including EAS devices registered within the Intune Service
     .NOTES
-    NAME: Get-IDMDeviceInRunspace
+    NAME: Get-RunspaceIntuneDevices
     #>
 
     [cmdletbinding()]
@@ -48,28 +48,42 @@ Function Get-IDMDeviceInRunspace{
         $AuthToken = $Global:AuthToken
     )
 
-    Update-IDMProgress -Runspace $Runspace -StatusMsg ("Retrieving Device list...") -Indeterminate
+    Update-UIProgress -Runspace $Runspace -StatusMsg ("Retrieving Device list...") -Indeterminate
 
     # Defining Variables
     $graphApiVersion = "beta"
     $Resource = "deviceManagement/managedDevices"
 
-    $Query = @()
-    $Count_maParams = 0
-    if($IncludeEAS.IsPresent){$Count_maParams++}
+    if($IncludeEAS.IsPresent){ $Count_Params++ }
+    if($ExcludeMDM.IsPresent){ $Count_Params++ }
 
-    if($ExcludeMDM.IsPresent){
-        $Count_maParams++
-        $Query += "managementAgent eq 'eas'"
+    if($Count_Params -gt 1){
+
+        write-warning "Multiple parameters set, specify a single parameter -IncludeEAS, -ExcludeMDM or no parameter against the function"
+        Write-Host
+        break
+
     }
 
-    if($IncludeEAS -eq $false -and $ExcludeMDM -eq $false){
-        $Query += "managementAgent eq 'easmdm'"
+    $Query = @()
+    if($IncludeEAS){
+        #include all queries by leaving filter empty
+    }
+    Elseif($ExcludeMDM){
+        $Query += "managementAgent eq 'eas'"
+        $Query += "managementAgent eq 'easIntuneClient'"
+        $Query += "managementAgent eq 'configurationManagerClientEas'"
+    }
+    Else{
         $Query += "managementAgent eq 'mdm'"
-        Write-Warning "EAS Devices are excluded by default, please use -IncludeEAS if you want to include those devices"
+        $Query += "managementAgent eq 'easMdm'"
+        $Query += "managementAgent eq 'intuneClient'"
+        $Query += "managementAgent eq 'configurationManagerClient'"
+        $Query += "managementAgent eq 'configurationManagerClientMdm'"
     }
 
     If($PSBoundParameters.ContainsKey('Filter')){
+        #TEST $Filter = '46VEYL1'
         $Query += "contains(deviceName,'$($Filter)')"
     }
 
@@ -77,15 +91,12 @@ Function Get-IDMDeviceInRunspace{
         $Query += "operatingSystem eq '$($Platform)'"
     }
 
-    $filterQuery = "`?`$filter=" + ($Query -join ' and ')
-
-
-    if($Count_maParams -gt 1){
-        write-error "Multiple parameters set, specify a single parameter -IncludeEAS, -ExcludeMDM or no parameter against the function"
+    #build query filter if exists
+    If($Query.count -ge 1){
+        $filterQuery = "`?`$filter=" + ($Query -join ' and ')
     }
-    else {
-        $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource" + $filterQuery
-    }
+
+    $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource" + $filterQuery
 
     Write-UIOutput -UIObject $ParentRunspace.Logging -Message ("Retrieving data from URI: {0}" -f $uri) -Type Info
 
@@ -95,7 +106,7 @@ Function Get-IDMDeviceInRunspace{
             $Runspace.GraphData.MDMDevices = Invoke-IDMGraphRequests -Uri $uri -Headers $AuthToken -Passthru -ErrorAction Stop
         }
         catch {
-            Update-IDMProgress -Runspace $Runspace -PercentComplete 100 -StatusMsg ("Response content: {0}" -f $_.Exception.Response.StatusCode) -Color Red
+            Update-UIProgress -Runspace $Runspace -PercentComplete 100 -StatusMsg ("Response content: {0}" -f $_.Exception.Response.StatusCode) -Color Red
             Write-UIOutput -Runspace $ParentRunspace -UIObject $ParentRunspace.Logging -Message ("Response content: {0}" -f $_.Exception.Response.StatusCode) -Type Error
         }
     })
@@ -105,7 +116,11 @@ Function Get-IDMDeviceInRunspace{
         $i=0
         $Devices = @()
         #Populate AAD devices
-        Get-IDMAzureDevicesInRunspace -Runspace $Runspace -ParentRunspace $Runspace -AuthToken $AuthToken
+        Get-RunspaceAzureDevices -Runspace $Runspace -ParentRunspace $Runspace -AuthToken $AuthToken
+
+        #collect stale objects
+        $StaleDate = (Get-Date).AddDays(-90)
+        $StaleObj = $AADObjects | Where {$_.approximateLastSignInDateTime -le $StaleDate}
 
         $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
 
@@ -117,7 +132,7 @@ Function Get-IDMDeviceInRunspace{
                 $i++
                 If($PSBoundParameters.ContainsKey('ListObject'))
                 {
-                    Update-IDMProgress -Runspace $Runspace -PercentComplete ($i/$Runspace.GraphData.MDMDevices.count * 100) -StatusMsg ("[{0} of {1}] :: Adding [{2}] to list..." -f $i,$Runspace.GraphData.MDMDevices.count,$Resource.deviceName)
+                    Update-UIProgress -Runspace $Runspace -PercentComplete ($i/$Runspace.GraphData.MDMDevices.count * 100) -StatusMsg ("[{0} of {1}] :: Adding [{2}] to list..." -f $i,$Runspace.GraphData.MDMDevices.count,$Resource.deviceName)
                     Write-UIOutput -Runspace $ParentRunspace -UIObject $ParentRunspace.Logging -Message ("Adding item to [{1}]: {0}" -f $Resource.deviceName,$ListObject.Name) -Type Info
                     $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
                         $ListObject.Items.Add($Resource.deviceName) | Out-Null
@@ -143,7 +158,6 @@ Function Get-IDMDeviceInRunspace{
                     $OutputItem | Add-Member NoteProperty "extensionAttributes " -Value $FilteredObj.extensionAttributes -Force
                     # Add the object to our array of output objects
                 }
-
                 $Runspace.Data.IntuneDevices += $OutputItem
             }
         })
@@ -156,7 +170,7 @@ Function Get-IDMDeviceInRunspace{
             Foreach($Device in $Devices.Where({ $null -ne $_ }))
             {
                 $i++
-                Update-IDMProgress -Runspace $Runspace -PercentComplete ($i/$Devices.count * 100) -StatusMsg ("[{0} of {1}] :: Adding [{2}] to list..." -f $i,$Devices.count,$Device.deviceName)
+                Update-UIProgress -Runspace $Runspace -PercentComplete ($i/$Devices.count * 100) -StatusMsg ("[{0} of {1}] :: Adding [{2}] to list..." -f $i,$Devices.count,$Device.deviceName)
                 Write-UIOutput -Runspace $ParentRunspace -UIObject $ParentRunspace.Logging -Message ("Adding item to [{1}]: {0}" -f $Device.deviceName,$ListObject.Name) -Type Info
                 $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
                     $ListObject.Items.Add($Device.deviceName) | Out-Null
@@ -170,7 +184,7 @@ Function Get-IDMDeviceInRunspace{
         })
     }
 
-    #Update-IDMProgress -Runspace $Runspace -PercentComplete 100 -StatusMsg ("Added {0} items to list" -f $Devices.count) -Color Green
+    #Update-UIProgress -Runspace $Runspace -PercentComplete 100 -StatusMsg ("Added {0} items to list" -f $Devices.count) -Color Green
     Write-UIOutput -Runspace $ParentRunspace -UIObject $ParentRunspace.Logging -Message ("Found {0} devices" -f $Devices.count) -Type Info
 
     #return $Devices.Where({ $null -ne $_ })
@@ -180,7 +194,7 @@ Function Get-IDMDeviceInRunspace{
 
 
 
-Function Get-IDMAzureDevicesInRunspace{
+Function Get-RunspaceAzureDevices{
     <#
     .SYNOPSIS
     This function is used to get Azure Devices from the Graph API REST interface
@@ -237,7 +251,7 @@ Function Get-IDMAzureDevicesInRunspace{
                 $Runspace.GraphData.AADDevices = Invoke-IDMGraphRequests -Uri $uri -Headers $AuthToken -Passthru -ErrorAction Stop
             }
             catch {
-                Update-IDMProgress -Runspace $Runspace -PercentComplete 100 -StatusMsg ("Response content: {0}" -f $_.Exception.Response.StatusCode) -Color Red
+                Update-UIProgress -Runspace $Runspace -PercentComplete 100 -StatusMsg ("Response content: {0}" -f $_.Exception.Response.StatusCode) -Color Red
                 Write-UIOutput -Runspace $ParentRunspace -UIObject $ParentRunspace.Logging -Message ("Response content: {0}" -f $_.Exception.Response.StatusCode) -Type Error
             }
         })
@@ -250,7 +264,7 @@ Function Get-IDMAzureDevicesInRunspace{
 }
 
 
-Function Get-IDMIntuneAssignmentsInRunspace{
+Function Get-RunspaceIntuneAssignments{
     [cmdletbinding()]
     Param(
         [Parameter(Mandatory=$false)]
@@ -287,7 +301,7 @@ Function Get-IDMIntuneAssignmentsInRunspace{
     )
 
     If($PSBoundParameters.ContainsKey('Runspace')){
-        Update-IDMProgress -Runspace $Runspace -StatusMsg ("Retrieving assignments...") -Indeterminate
+        Update-UIProgress -Runspace $Runspace -StatusMsg ("Retrieving assignments...") -Indeterminate
     }
 
     $graphApiVersion = "beta"
@@ -534,7 +548,7 @@ Function Get-IDMIntuneAssignmentsInRunspace{
             }
 
             If($PSBoundParameters.ContainsKey('Runspace')){
-                Update-IDMProgress -Runspace $Runspace -PercentComplete ($i/$ResourceAssignments.count * 100) -StatusMsg ("[{0} of {1}] :: Adding assignment to list: {2}" -f $i,$ResourceAssignments.count,$Assignment.Name)
+                Update-UIProgress -Runspace $Runspace -PercentComplete ($i/$ResourceAssignments.count * 100) -StatusMsg ("[{0} of {1}] :: Adding assignment to list: {2}" -f $i,$ResourceAssignments.count,$Assignment.Name)
             }
 
             $AssignmentList += $AssignmentGroup
@@ -548,186 +562,3 @@ Function Get-IDMIntuneAssignmentsInRunspace{
         Return $AssignmentList
     }
 }
-
-
-Function Invoke-IDMGraphRequests{
-    <#
-    .SYNOPSIS
-     Invoke Rest method in multithread
-    .DESCRIPTION
-     Invoke Rest method using the get method but do it using a pool of runspaces
-
-    .NOTES
-    Reference:
-    https://b-blog.info/en/implement-multi-threading-with-net-runspaces-in-powershell.html
-    https://adamtheautomator.com/powershell-multithreading/
-
-    #>
-    [cmdletbinding()]
-    param (
-        [Parameter(Mandatory=$True,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true,HelpMessage="Specify Uri or array or Uris")]
-        [string[]]$Uri,
-
-        [Parameter(Mandatory=$true)]
-        [hashtable]$Headers,
-
-        [int]$Threads = 15,
-
-        [switch]$Passthru
-    );
-    Begin{
-        #initialSessionState will hold typeDatas and functions that will be passed to every runspace.
-        $initialSessionState = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault();
-
-        #define function to run
-        function Get-RestData {
-            param (
-                [Parameter(Mandatory=$true,Position=0)][string]$Uri,
-                [Parameter(Mandatory=$true,Position=1)][hashtable]$Headers
-            );
-            try {
-                $response = Invoke-RestMethod -Uri $Uri -Headers $Headers -Method Get -DisableKeepAlive -ErrorAction Stop;
-            } catch {
-                $ex = $_.Exception
-                $errorResponse = $ex.Response.GetResponseStream()
-                $reader = New-Object System.IO.StreamReader($errorResponse)
-                $reader.BaseStream.Position = 0
-                $reader.DiscardBufferedData()
-                $responseBody = $reader.ReadToEnd();
-                Write-Host ("{0}: Error Status: {1}; {2}" -f $uri,$ex.Response.StatusCode,$responseBody)
-                return $false;
-            };
-
-            return $response.value;
-        }
-
-        #add function to the initialSessionState
-        $GetRestData_def = Get-Content Function:\Get-RestData;
-        $GetRestDataSessionStateFunction = New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry -ArgumentList 'Get-RestData', $GetRestData_def;
-        $initialSessionState.Commands.Add($GetRestDataSessionStateFunction);
-
-        #define your TypeData (Makes the output as object later on)
-        $init = @{
-            MemberName = 'Init';
-            MemberType = 'ScriptMethod';
-            Value = {
-                Add-Member -InputObject $this -MemberType NoteProperty -Name uri -Value $null;
-                Add-Member -InputObject $this -MemberType NoteProperty -Name headers -Value $null;
-                Add-Member -InputObject $this -MemberType NoteProperty -Name value -Value $null;
-            };
-            Force = $true;
-        }
-
-        # and initiate the function call to add to session state:
-        $populate = @{
-            MemberName = 'Populate';
-            MemberType = 'ScriptMethod';
-            Value = {
-                param (
-                    [Parameter(Mandatory=$true)][string]$Uri,
-                    [Parameter(Mandatory=$true)][hashtable]$Headers
-                );
-                $this.uri = $Uri;
-                $this.headers = $Headers
-                $this.value = (Get-RestData -Uri $Uri -Headers $Headers);
-            };
-            Force = $true;
-        }
-
-        Update-TypeData -TypeName 'Custom.Object' @Init;
-        Update-TypeData -TypeName 'Custom.Object' @Populate;
-        $customObject_typeEntry = New-Object System.Management.Automation.Runspaces.SessionStateTypeEntry -ArgumentList $(Get-TypeData Custom.Object), $false;
-        $initialSessionState.Types.Add($customObject_typeEntry);
-
-        #define our main, entry point to runspace
-        $ScriptBlock = {
-            Param (
-                [PSCustomObject]$Uri,
-                $Headers
-            )
-
-            #build object and
-            $page = [PsCustomObject]@{PsTypeName ='Custom.Object'};
-            $page.Init();
-            $page.Populate($Uri,$Headers);
-
-            $Result = New-Object PSObject -Property @{
-                uri = $page.Uri
-                value = $page.value
-            };
-
-            return $Result;
-        }
-
-        #build Runsapce threads
-        $RunspacePool = [RunspaceFactory]::CreateRunspacePool(1, $Threads, $initialSessionState, $Host);
-        $RunspacePool.Open();
-        $Jobs = @();
-    }
-    Process{
-        #START THE JOB
-        $i = 0;
-        foreach($url in $Uri) { #$Uri - some array of uris
-            $i++;
-            #call scriptblock with arguments
-            $Job = [powershell]::Create().AddScript($ScriptBlock).AddArgument($url).AddArgument($Headers);
-            $Job.RunspacePool = $RunspacePool;
-            $Jobs += New-Object PSObject -Property @{
-                RunNum = $i;
-                Pipe = $Job;
-                Result = $Job.BeginInvoke();
-            }
-        }
-    }
-    End{
-        $results = @();
-        #TEST $job = $jobs
-        foreach ($Job in $Jobs) {
-            $Result = $Job.Pipe.EndInvoke($Job.Result)
-            #add uri to object list if passthru used
-            If($Passthru){
-                Foreach($item in $Result.value){
-                    $OutputItem = New-Object PSObject
-                    $OutputItem | Add-Member NoteProperty "uri" -Value $Result.uri -Force
-                    Foreach($p in $item | Get-Member -MemberType NoteProperty){
-                        $OutputItem | Add-Member NoteProperty $p.name -Value $item.($p.name)
-                    }
-                $Results += $OutputItem
-                }
-            }
-            Else{
-                $Results += $Result
-            }
-        }
-        Return $Results
-    }
-}
-<#TEST
-    $Uri = 'https://graph.microsoft.com/beta/deviceManagement/managedDevices'
-    Invoke-IDMGraphRequests -Uri $Uri -Headers $AuthToken -Passthru
-
-
-$Uri = @(
-    'https://graph.microsoft.com/beta/deviceManagement/deviceCompliancePolicies'
-    'https://graph.microsoft.com/beta/deviceManagement/deviceComplianceScripts'
-    'https://graph.microsoft.com/beta/deviceManagement/deviceConfigurations'
-    'https://graph.microsoft.com/beta/deviceManagement/deviceEnrollmentConfigurations'
-    'https://graph.microsoft.com/beta/deviceManagement/deviceHealthScripts'
-    'https://graph.microsoft.com/beta/deviceManagement/deviceManagementScripts'
-    'https://graph.microsoft.com/beta/deviceManagement/roleScopeTags'
-    'https://graph.microsoft.com/beta/deviceManagement/windowsQualityUpdateProfiles'
-    'https://graph.microsoft.com/beta/deviceManagement/windowsFeatureUpdateProfiles'
-    'https://graph.microsoft.com/beta/deviceAppManagement/windowsInformationProtectionPolicies'
-    'https://graph.microsoft.com/beta/deviceAppManagement/mdmWindowsInformationProtectionPolicies'
-    'https://graph.microsoft.com/beta/deviceAppManagement/mobileApps'
-    'https://graph.microsoft.com/beta/deviceAppManagement/policysets'
-)
-$Responses = $Uri | Invoke-IDMGraphRequests -Headers $AuthToken -Threads $Uri.count -Passthru
-$Responses[0]
-
-Measure-command {
-    Get-IDMIntuneAssignments -Target Devices -Platform $syncHash.Properties.DevicePlatform -TargetId $syncHash.Data.SelectedDevice.azureADObjectId -IncludePolicySetInherits
-    Get-IDMIntuneAssignments -Target Users -Platform $syncHash.Properties.DevicePlatform -TargetId $syncHash.Data.AssignedUser.id -IncludePolicySetInherits
-}
-Measure-command {Get-IDMIntuneAssignmentsInRunspace -Platform $syncHash.Properties.DevicePlatform -TargetSet @{devices=$syncHash.Data.SelectedDevice.azureADObjectId;users=$syncHash.Data.AssignedUser.id} -IncludePolicySetInherits}
-#>

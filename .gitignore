@@ -3,5 +3,8 @@
 !/.vscode/
 /.vscode/*
 *.code-workspace
+Intune.ps1
+Autopilot.ps1
+MSGraph.ps1
 *.zip
 Tests.ps1

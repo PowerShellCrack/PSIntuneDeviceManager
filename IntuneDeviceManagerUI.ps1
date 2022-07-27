@@ -311,7 +311,7 @@ Function Show-IDMWindow
         $updateUI = {
 
             If($syncHash.AssignmentWindow.Window.IsVisible -eq $true){
-                Update-IDMProgress -Runspace $synchash -StatusMsg ('Found {0} assignment(s) for device [{1}] and user [{2}]' -f $syncHash.AssignmentWindow.AssignmentData.count,$syncHash.Data.SelectedDevice.deviceName,$syncHash.Data.AssignedUser.userPrincipalName) -PercentComplete 100
+                Update-UIProgress -Runspace $synchash -StatusMsg ('Found {0} assignment(s) for device [{1}] and user [{2}]' -f $syncHash.AssignmentWindow.AssignmentData.count,$syncHash.Data.SelectedDevice.deviceName,$syncHash.Data.AssignedUser.userPrincipalName) -PercentComplete 100
             }
 
             If($syncHash.AssignmentWindow.Window){
@@ -763,7 +763,7 @@ Function Show-IDMWindow
                 $syncHash.AppSecretPopup.IsOpen = $false
                 $syncHash.Properties.AppConnect = $false
                 $syncHash.btnMSGraphConnect.IsEnabled = $false
-                Update-IDMProgress -Runspace $synchash -StatusMsg ('User cancelled app connection. Close and reopen app to try again') -PercentComplete 100 -Color 'Red'
+                Update-UIProgress -Runspace $synchash -StatusMsg ('User cancelled app connection. Close and reopen app to try again') -PercentComplete 100 -Color 'Red'
             })
 
             $syncHash.btnAppSecretSubmit.Add_Click({
@@ -806,12 +806,12 @@ Function Show-IDMWindow
         #action for connect button
         $syncHash.btnMSGraphConnect.Add_Click({
             $this.IsEnabled = $false
-            Update-IDMProgress -Runspace $synchash -StatusMsg "Connecting to Microsoft Graph Api..." -Indeterminate
+            Update-UIProgress -Runspace $synchash -StatusMsg "Connecting to Microsoft Graph Api..." -Indeterminate
 
             If($syncHash.Properties.AppConnect)
             {
                 If([string]::IsNullOrEmpty($syncHash.pwdAppSecret.Password) ){
-                    Update-IDMProgress -Runspace $synchash -StatusMsg "Unable to retrieve app secret." -Indeterminate
+                    Update-UIProgress -Runspace $synchash -StatusMsg "Unable to retrieve app secret." -Indeterminate
                 }
                 <#
                 #using MSAL module
@@ -860,7 +860,7 @@ Function Show-IDMWindow
             $syncHash.Window.Topmost = $true
             If($null -ne $syncHash.Data.AuthToken)
             {
-                #Update-IDMProgress -Runspace $synchash -StatusMsg ('Searching for managed [{0}] devices...' -f $syncHash.properties.DevicePlatform) -Indeterminate
+                #Update-UIProgress -Runspace $synchash -StatusMsg ('Searching for managed [{0}] devices...' -f $syncHash.properties.DevicePlatform) -Indeterminate
 
 
                 #grab all managed devices
@@ -871,7 +871,7 @@ Function Show-IDMWindow
                     Add-UIList -Runspace $syncHash -ItemsList (Get-IDMDeviceCategory) -DropdownObject $syncHash.cmbDeviceCategoryList -Identifier 'displayName'
 
                     #build device query
-                    $DeviceParams = @{AuthToken=$syncHash.Data.AuthToken;IncludeEAS=$true}
+                    $DeviceParams = @{AuthToken=$syncHash.Data.AuthToken}
                     If($syncHash.Properties.DevicePlatform){
                         $DeviceParams += @{Platform=$syncHash.Properties.DevicePlatform}
                     }
@@ -881,8 +881,9 @@ Function Show-IDMWindow
                     #encapsulate device in array (incase there is only 1)
                     #$syncHash.Data.IntuneDevices = @(Get-IDMDevice @DeviceParams -Expand)
                     #$syncHash.Data.IntuneDevices = @()
-                    #$syncHash.Data.IntuneDevices += Get-IDMDeviceInRunspace -Runspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
-                    Get-IDMDeviceInRunspace -Runspace $syncHash -ParentRunspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
+                    #$syncHash.Data.IntuneDevices += Get-RunspaceIntuneDevices -Runspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
+                    Get-RunspaceIntuneDevices -Runspace $syncHash -ParentRunspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
+                    #Invoke-Command -ScriptBlock {Get-RunspaceIntuneDevices -Runspace $syncHash -ParentRunspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices} -ArgumentList @($syncHash,$DeviceParams,$syncHash.listIntuneDevices)
 
                     If($syncHash.Data.IntuneDevices.count -gt 0)
                     {
@@ -898,7 +899,7 @@ Function Show-IDMWindow
                     Else{
                         $syncHash.btnRefreshList.IsEnabled = $false
                         $syncHash.btnNewDeviceName.IsEnabled = $false
-                        Update-IDMProgress -Runspace $synchash -StatusMsg ('No devices found') -PercentComplete 100 -Color 'Red'
+                        Update-UIProgress -Runspace $synchash -StatusMsg ('No devices found') -PercentComplete 100 -Color 'Red'
                         Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("No devices found. Log into a different Azure tenant or credentials to retrieve registered devices") -Type Error
                     }
                 #})
@@ -1098,7 +1099,7 @@ Function Show-IDMWindow
         #========================
         $syncHash.btnRefreshList.Add_Click({
             $this.IsEnabled = $false
-            Update-IDMProgress -Runspace $synchash -StatusMsg ('Refreshing managed [{0}] device list...' -f $syncHash.properties.DevicePlatform) -Indeterminate
+            Update-UIProgress -Runspace $synchash -StatusMsg ('Refreshing managed [{0}] device list...' -f $syncHash.properties.DevicePlatform) -Indeterminate
 
             #clear current list
             $syncHash.btnRefreshList.Dispatcher.Invoke("Normal",[action]{
@@ -1108,7 +1109,7 @@ Function Show-IDMWindow
 
             #grab all managed devices
             If($null -ne $syncHash.Data.AuthToken){
-                $DeviceParams = @{AuthToken=$syncHash.Data.AuthToken;IncludeEAS=$true}
+                $DeviceParams = @{AuthToken=$syncHash.Data.AuthToken}
                 If($syncHash.Properties.DevicePlatform){
                     $DeviceParams += @{Platform=$syncHash.Properties.DevicePlatform}
                 }
@@ -1117,8 +1118,8 @@ Function Show-IDMWindow
                 }
                 #refresh list
                 #$syncHash.Data.IntuneDevices = @()
-                #$syncHash.Data.IntuneDevices += Get-IDMDeviceInRunspace -Runspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
-                Get-IDMDeviceInRunspace -Runspace $syncHash -ParentRunspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
+                #$syncHash.Data.IntuneDevices += Get-RunspaceIntuneDevices -Runspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
+                Get-RunspaceIntuneDevices -Runspace $syncHash -ParentRunspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
                 #$syncHash.Data.IntuneDevices = @(Get-IDMDevice @DeviceParams -Expand)
             }
 
@@ -1130,14 +1131,14 @@ Function Show-IDMWindow
                 $syncHash.btnRefreshList.IsEnabled = $true
                 $syncHash.btnNewDeviceName.IsEnabled =$true
 
-                Update-IDMProgress -Runspace $synchash -StatusMsg ('Found {0} devices the meet platform requirement [{1}]' -f $syncHash.Data.IntuneDevices.count,$syncHash.properties.DevicePlatform) -PercentComplete 100
+                Update-UIProgress -Runspace $synchash -StatusMsg ('Found {0} devices the meet platform requirement [{1}]' -f $syncHash.Data.IntuneDevices.count,$syncHash.properties.DevicePlatform) -PercentComplete 100
 
                 #Add-UIList -ItemsList $syncHash.Data.IntuneDevices -ListObject $syncHash.listIntuneDevices -Identifier 'deviceName'
             }
             Else{
                 $syncHash.btnRefreshList.IsEnabled = $false
                 $syncHash.btnNewDeviceName.IsEnabled = $false
-                Update-IDMProgress -Runspace $synchash -StatusMsg ('No devices found') -PercentComplete 100 -Color 'Red'
+                Update-UIProgress -Runspace $synchash -StatusMsg ('No devices found') -PercentComplete 100 -Color 'Red'
                 Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("No devices found. Log into a different Azure tenant or credentials to retrieve registered devices") -Type Error
             }
             $this.IsEnabled = $true
@@ -1189,13 +1190,17 @@ Function Show-IDMWindow
                         }
                     }
 
+                    <#
                     $Data = ($syncHash.Data.SelectedDevice | Select deviceRegistrationState,azureADRegistered,easDeviceId,userPrincipalName,userId,wiFiMacAddress,
                                                             easActivated,userDisplayName,aadRegistered,complianceState,deviceType,joinType,specificationVersion,skuNumber,serialNumber,ownerType,
                                                             processorArchitecture,isEncrypted,managementState,ethernetMacAddress,model,physicalMemoryInBytes,
                                                             id,emailAddress,osVersion,deviceEnrollmentType,azureADDeviceId,freeStorageSpaceInBytes,
                                                             operatingSystem,manufacturer,managementAgent,deviceName,chassisType,enrollmentProfileName,
                                                             totalStorageSpaceInBytes,autopilotEnrolled,managedDeviceOwnerType,
+                                                            accountEnabled, deviceId,
                                                             skuFamily).psobject.properties | foreach -begin {$h=@{}} -process {$h."$($_.Name)" = $_.Value} -end {$h}
+                                                            #>
+                    $Data = ($syncHash.Data.SelectedDevice | Select *).psobject.properties | foreach -begin {$h=@{}} -process {$h."$($_.Name)" = $_.Value} -end {$h}
                     $syncHash.lstHardwareDevice.ItemsSource = $Data
                 }
                 Else{
@@ -1281,28 +1286,28 @@ Function Show-IDMWindow
             # disable this button to prevent multiple export.
             $syncHash.btnViewIntuneAssignments.Dispatcher.Invoke("Normal",[action]{
                 $this.IsEnabled = $false
-                Update-IDMProgress -Runspace $synchash -StatusMsg ("Please wait while loading device and user assignment data, this can take a while...") -Indeterminate
+                Update-UIProgress -Runspace $synchash -StatusMsg ("Please wait while loading device and user assignment data, this can take a while...") -Indeterminate
 
-                #Get-IDMIntuneAssignmentsInRunspace -Runspace $syncHash -ParentRunspace $syncHash -Platform $syncHash.Properties.DevicePlatform -TargetSet @{devices=$syncHash.Data.SelectedDevice.azureADObjectId;users=$syncHash.Data.AssignedUser.id} -IncludePolicySetInherits
-                #Update-IDMProgress -Runspace $synchash -StatusMsg ("Please wait while loading device and user assignment data, this can take a while...") -Indeterminate
+                #Get-RunspaceIntuneAssignments -Runspace $syncHash -ParentRunspace $syncHash -Platform $syncHash.Properties.DevicePlatform -TargetSet @{devices=$syncHash.Data.SelectedDevice.azureADObjectId;users=$syncHash.Data.AssignedUser.id} -IncludePolicySetInherits
+                #Update-UIProgress -Runspace $synchash -StatusMsg ("Please wait while loading device and user assignment data, this can take a while...") -Indeterminate
 
                 #$syncHash.Data.DeviceAssignments = Get-IDMIntuneAssignments -Target Devices -Platform $syncHash.Properties.DevicePlatform -TargetId $syncHash.txtDeviceAzureObjectId.text -IncludePolicySetInherits
                 #Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Found {0} {1} device assignments for device [{2}]" -f $syncHash.Data.DeviceAssignments.count,$syncHash.Properties.DevicePlatform,$syncHash.txtSelectedDevice.text) -Type info
                 #$syncHash.Data.UserAssignments = Get-IDMIntuneAssignments -Target Users -Platform $syncHash.Properties.DevicePlatform -TargetId $syncHash.txtAssignedUserId.text -IncludePolicySetInherits
                 #Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging-Message ("Found {0} {1} user assignments for user [{2}]" -f $syncHash.Data.UserAssignments.count,$syncHash.Properties.DevicePlatform,$syncHash.txtAssignedUserUPN.text) -Type info
-                #Show-IDMAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -UserData $syncHash.Data.AssignedUser -SupportScripts @("$FunctionPath\Intune.ps1","$FunctionPath\Runspace.ps1") -AuthToken $syncHash.Data.AuthToken
-                #Show-IDMAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -DeviceAssignments $syncHash.Data.DeviceAssignments -UserData $syncHash.Data.AssignedUser -UserAssignments $syncHash.Data.UserAssignments -IncludeInherited
+                #Show-UIAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -UserData $syncHash.Data.AssignedUser -SupportScripts @("$FunctionPath\Intune.ps1","$FunctionPath\Runspace.ps1") -AuthToken $syncHash.Data.AuthToken
+                #Show-UIAssignmentsWindow -DeviceData $syncHash.Data.SelectedDevice -DeviceAssignments $syncHash.Data.DeviceAssignments -UserData $syncHash.Data.AssignedUser -UserAssignments $syncHash.Data.UserAssignments -IncludeInherited
 
                 <#
-                Show-IDMAssignmentsWindow -ParentSynchash $syncHash -AuthToken $syncHash.Data.AuthToken `
+                Show-UIAssignmentsWindow -ParentSynchash $syncHash -AuthToken $syncHash.Data.AuthToken `
                                                 -DeviceData $syncHash.Data.SelectedDevice `
                                                 -UserData $syncHash.Data.AssignedUser `
                                                 -SupportScripts @("$FunctionPath\Intune.ps1","$FunctionPath\Runspace.ps1","$FunctionPath\UIControls.ps1") -IncludeInherited
                 #>
-                $syncHash.AssignmentWindow = Show-IDMAssignmentsWindow -ParentSynchash $syncHash -AuthToken $syncHash.Data.AuthToken `
+                $syncHash.AssignmentWindow = Show-UIAssignmentsWindow -ParentSynchash $syncHash -AuthToken $syncHash.Data.AuthToken `
                                                 -DeviceData $syncHash.Data.SelectedDevice `
                                                 -UserData $syncHash.Data.AssignedUser `
-                                                -SupportScripts @("$FunctionPath\Intune.ps1","$FunctionPath\Runspace.ps1","$FunctionPath\UIControls.ps1") -IncludeInherited -LoadOnStartup
+                                                -SupportScripts @("$FunctionPath\Runspace.ps1","$FunctionPath\UIControls.ps1") -IncludeInherited -LoadOnStartup
 
 
                 <#
