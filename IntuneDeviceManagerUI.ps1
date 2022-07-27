@@ -1026,11 +1026,11 @@ Function Show-IDMWindow
                 #determine if device has been autopiloted (look for ZTDID and profile type). Is there a better way???
                 If($syncHash.Data.SelectedDevice.physicalIds -match '\[ZTDID\]' -and $syncHash.Data.SelectedDevice.profileType -ne 'RegisteredDevice'){
                     $syncHash.lblDeviceAutopilotedStatus.Foreground = 'Black'
-                    $syncHash.txtDeviceAutopilotedStatus.Foreground = 'Blue'
+                    $syncHash.txtDeviceAutopilotedStatus.Foreground = 'Green'
                     $syncHash.txtDeviceAutopilotedStatus.Text = 'Online Profile'
                 }ElseIf($syncHash.Data.SelectedDevice.enrollmentProfileName -like 'OfflineAutopilotprofile*'){
                     $syncHash.lblDeviceAutopilotedStatus.Foreground = 'Black'
-                    $syncHash.txtDeviceAutopilotedStatus.Foreground = 'Black'
+                    $syncHash.txtDeviceAutopilotedStatus.Foreground = 'Blue'
                     $syncHash.txtDeviceAutopilotedStatus.Text = 'Offline JSON'
                 }Else{
                     $syncHash.lblDeviceAutopilotedStatus.Foreground = 'Gray'

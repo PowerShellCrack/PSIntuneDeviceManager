@@ -126,14 +126,15 @@ If($PSBoundParameters.ContainsKey('Offline')){$OfflineMode = $true}Else{$Offline
 [string]$ResourcePath = Join-Path -Path $scriptRoot -ChildPath 'Resources'
 [string]$XAMLFilePath = Join-Path -Path $ResourcePath -ChildPath 'MainWindow.xaml'
 
+
 ##*=============================================
 ##* External Functions
 ##*=============================================
 . "$FunctionPath\Logging.ps1"
 . "$FunctionPath\Environment.ps1"
 . "$FunctionPath\DeviceInfo.ps1"
-. "$FunctionPath\MSgraph.ps1"
-. "$FunctionPath\Intune.ps1"
+#. "$FunctionPath\MSgraph.ps1"
+#. "$FunctionPath\Intune.ps1"
 . "$FunctionPath\UIControls.ps1"
 
 #Return log path (either in task sequence or temp dir)
@@ -344,6 +345,8 @@ Foreach($Module in $ModulesNeeded){
 }
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+Install-Module -Name IDMCmdlets -AllowClobber -Force -Confirm:$false
 #Install-Module -Name AzureAD -Force
 #Install-Module -Name Microsoft.Graph -Force
 #Import-Module ActiveDirectory -Force
@@ -725,7 +728,7 @@ $ui_btnMSGraphConnect.Add_Click({
         If([string]::IsNullOrEmpty($AppSecret) ){
             Write-UIOutput -UIObject $ui_Logging -Message "Unable to retrieve app secret." -Type Start -Passthru
         }
-        $Global:AuthToken = Connect-MSGraphAsAnApp -AppId $ApplicationId -TenantId $AppTenantId -AppSecret $ui_pwdAppSecret.Password
+        $Global:AuthToken = Connect-IDMGraphApp -AppId $ApplicationId -TenantId $AppTenantId -AppSecret $ui_pwdAppSecret.Password
         #build object to simulate connection checks
         $IntuneConnection = "" | Select UPN,TenantId
         $IntuneConnection.UPN = $ApplicationId
@@ -737,7 +740,7 @@ $ui_btnMSGraphConnect.Add_Click({
         $IntuneConnection = Connect-MSGraph -AdminConsent
         Write-UIOutput -UIObject $ui_Logging -Message ("Connected to MSGraph using account: {0}" -f $IntuneConnection.UPN) -Type Start -Passthru
         $TenantID = $IntuneConnection.TenantId
-        $Global:AuthToken = Get-AuthToken -User $IntuneConnection.UPN
+        $Global:AuthToken = Get-IDMGraphAuthToken -User $IntuneConnection.UPN
         #Put window back to its normal size if minimized
         If($null -ne $Global:AuthToken){
             $UI.WindowState = 'Normal'; $UI.Topmost = $true
