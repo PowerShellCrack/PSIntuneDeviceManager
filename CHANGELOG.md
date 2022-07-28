@@ -1,5 +1,11 @@
 # Change log for IntuneDeviceManagerUI.ps1
 
+## 1.4.6 - July 28, 2022
+
+- Formatted device hardware retrieval to be more readable
+- Fixed dropdown list ; populated null values
+- Stale device tab created; nothing is functional yet
+
 ## 1.4.5 - July 27, 2022
 
 - Fixed issue where EAS devices scan is need; issue with runspace scripts

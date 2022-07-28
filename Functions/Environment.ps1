@@ -297,3 +297,27 @@ Function Get-CMSiteCode{
 
     }
 }
+
+
+Function ConvertTo-ByteString {
+    Param(
+    [Parameter(ValueFromPipeline = $true)]
+    [ValidateNotNullOrEmpty()]
+    [long]$number
+    )
+
+    Begin{
+        $sizes = 'B','KB','MB','GB','TB','PB'
+    }
+    Process {
+        #
+        if ($number -eq 0) {return '0 B'}
+        $size = [math]::Log($number,1024)
+        $size = [math]::Floor($size)
+        $num = $number / [math]::Pow(1024,$size)
+        $num = "{0:N2}" -f $num
+        return "$num $($sizes[$size])"
+        #
+    }
+    End{}
+}

@@ -10,14 +10,14 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button" >
 
-                    <Border Name="border" 
+                    <Border Name="border"
                         BorderThickness="1"
-                        Padding="4,2" 
-                        BorderBrush="#bcd4e6" 
-                        CornerRadius="1" 
+                        Padding="4,2"
+                        BorderBrush="#bcd4e6"
+                        CornerRadius="1"
                         Background="#4682b4">
-                        <ContentPresenter HorizontalAlignment="Center" 
-                                        VerticalAlignment="Center" 
+                        <ContentPresenter HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
                                         TextBlock.TextAlignment="Center"
                                         />
                     </Border>
@@ -44,6 +44,55 @@
                         <Trigger Property="IsFocused" Value="False">
                             <Setter TargetName="border" Property="BorderBrush" Value="#336891" />
                             <Setter Property="Button.Background" Value="#336891" />
+                        </Trigger>
+
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+
+    <Style x:Key="ButtonSimpleRed" TargetType="{x:Type Button}">
+        <Setter Property="Background" Value="#7C0A02" />
+        <Setter Property="Foreground" Value="#FFE8EDF9" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button" >
+
+                    <Border Name="border"
+                        BorderThickness="1"
+                        Padding="4,2"
+                        BorderBrush="#bcd4e6"
+                        CornerRadius="1"
+                        Background="#7C0A02">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        TextBlock.TextAlignment="Center"
+                                        />
+                    </Border>
+
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="BorderBrush" Value="#C21807" />
+                        </Trigger>
+
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="border" Property="BorderBrush" Value="#420D09" />
+                            <Setter Property="Button.Foreground" Value="#FF1D3245" />
+                            <Setter Property="Effect">
+                                <Setter.Value>
+                                    <DropShadowEffect ShadowDepth="0" Color="#420D09" Opacity="1" BlurRadius="10"/>
+                                </Setter.Value>
+                            </Setter>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="border" Property="BorderBrush" Value="#9a0200" />
+                            <Setter Property="Button.Foreground" Value="#9a0200" />
+                            <Setter Property="Button.Background" Value="#CD5C5C" />
                         </Trigger>
 
                     </ControlTemplate.Triggers>

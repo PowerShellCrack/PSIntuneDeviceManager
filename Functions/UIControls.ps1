@@ -274,49 +274,52 @@ Function Set-UIElement {
 
 function Write-UIOutput {
 	param(
+    	[parameter(Mandatory=$true, Position=0,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
+    	[string]$Message,
+
         [Parameter(Mandatory=$false)]
         [hashtable]$Runspace,
 
         [parameter(Mandatory=$true)]
     	$UIObject,
 
-    	[parameter(Mandatory=$true)]
-    	[string]$Message,
-
     	[ValidateSet("Warning","Error","Info", "Start")]
     	[string]$Type,
 
         [switch]$Passthru
 	)
-    ## Get the name of this function
-    [string]${CmdletName} = $MyInvocation.MyCommand
+    Begin{
+        ## Get the name of this function
+        [string]${CmdletName} = $MyInvocation.MyCommand
 
-    Switch ($Type) {
-        "Info"    { $fg = "Gray";$Severity=1}
-        "Start"   { $fg = "Cyan";$Severity=1}
-        "Warning" { $fg = "Yellow";$Severity=2}
-        "Error"   {$fg = "Red";$Severity=3}
-        default {$fg = 'White';$Severity=1}
+        Switch ($Type) {
+            "Info"    { $fg = "Gray";$Severity=1}
+            "Start"   { $fg = "Cyan";$Severity=1}
+            "Warning" { $fg = "Yellow";$Severity=2}
+            "Error"   {$fg = "Red";$Severity=3}
+            default {$fg = 'White';$Severity=1}
+        }
+        $date = (Get-Date -Format G)
     }
-    $date = (Get-Date -Format G)
+    Process{
+        If($PSBoundParameters.ContainsKey('Runspace'))
+        {
+            $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
+                $UIObject.AppendText(("`n{0} :: {1}: {2}" -f $date.ToString(),$Type.ToUpper(),$Message))
+                $UIObject.ScrollToEnd()
+            })
+        }
+        Else{
 
-    If($PSBoundParameters.ContainsKey('Runspace'))
-    {
-        $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
             $UIObject.AppendText(("`n{0} :: {1}: {2}" -f $date.ToString(),$Type.ToUpper(),$Message))
+            #[System.Windows.Forms.Application]::DoEvents()
             $UIObject.ScrollToEnd()
-        })
+        }
     }
-    Else{
-
-        $UIObject.AppendText(("`n{0} :: {1}: {2}" -f $date.ToString(),$Type.ToUpper(),$Message))
-        #[System.Windows.Forms.Application]::DoEvents()
-        $UIObject.ScrollToEnd()
-    }
-
-
-    If($Passthru){
-        Write-LogEntry $Message -Severity $Severity -Source ${CmdletName}
+    End{
+        If($Passthru){
+            Write-LogEntry $Message -Severity $Severity -Source ${CmdletName}
+        }
     }
 }
 
@@ -458,74 +461,91 @@ Function Clear-PopupContent{
 
 Function Add-UIList{
     Param(
-        [Parameter(Mandatory=$false, Position=0)]
-        [hashtable]$Runspace,
-        [Parameter(Mandatory = $true, Position=1)]
+
+        [parameter(Mandatory=$true, Position=0,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         $ItemsList,
+
+        [Parameter(Mandatory=$false, Position=1)]
+        [hashtable]$Runspace,
+
         [Parameter(Mandatory = $true, Position=2,ParameterSetName="listbox")]
         [System.Windows.Controls.ListBox]$ListObject,
+
         [Parameter(Mandatory = $true, Position=2,ParameterSetName="dropdown")]
         [System.Windows.Controls.ComboBox]$DropdownObject,
+
         [Parameter(Mandatory = $false, Position=3)]
         [string]$Identifier,
+
+        [Parameter(Mandatory = $false, Position=4)]
+        [string]$Preselect,
+
         [switch]$Passthru
     )
-    ## Get the name of this function
-    [string]${CmdletName} = $MyInvocation.MyCommand
+    Begin{
+        ## Get the name of this function
+        [string]${CmdletName} = $MyInvocation.MyCommand
 
-    If ($PSCmdlet.ParameterSetName -eq "listbox") {
-        $Object = $ListObject
-        $ListObject.Items.Clear();
+        If ($PSCmdlet.ParameterSetName -eq "listbox") {
+            $ListObject.Items.Clear();
+            $Object = $ListObject
+        }
+        If ($PSCmdlet.ParameterSetName -eq "dropdown") {
+            $Object = $DropdownObject
+        }
+
     }
-    If ($PSCmdlet.ParameterSetName -eq "dropdown") {
-        $Object = $DropdownObject
-    }
+    Process{
+        #TEST  $item = $ItemsList[0]
+        #$ItemsList=$AbbrTypeList
+        #$Object=$UIResponseData.cmbRuleAbbrType
+        $i = 0
+        foreach ($item in $ItemsList | Where { $null -ne $_ })
+        {
+            $i++
+            If($PSBoundParameters.ContainsKey('Runspace')){
+                If($Identifier){
+                    Update-UIProgress -Runspace $Runspace -PercentComplete ($i/$ItemsList.count * 100) -StatusMsg ("[{0} of {1}] :: Adding [{2}] to list..." -f $i,$ItemsList.count,$item.$Identifier)
+                    Write-UIOutput -Runspace $Runspace -UIObject $Runspace.Logging -Message ("Adding item to [{1}] {2}: {0}" -f $item.$Identifier,$Object.Name,$PSCmdlet.ParameterSetName) -Type Info
 
-    If (!($PSBoundParameters.ContainsKey("Identifier")) ) {
-        $Identifier = $false
-    }
+                    $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
+                        $Object.Items.Add($item.$Identifier) | Out-Null
+                    })
+                }
+                Else{
+                    Update-UIProgress -Runspace $Runspace -PercentComplete ($i/$ItemsList.count * 100) -StatusMsg ("[{0} of {1}] :: Adding [{2}] to list..." -f $i,$ItemsList.count,$item)
+                    Write-UIOutput -Runspace $Runspace -UIObject $Runspace.Logging -Message ("Adding item to [{1}] {2}: {0}" -f $item,$Object.Name,$PSCmdlet.ParameterSetName) -Type Info
 
-    #TEST  $item = $ItemsList[0]
-    #$ItemsList=$AbbrTypeList
-    #$Object=$UIResponseData.cmbRuleAbbrType
-    $i = 0
-    foreach ($item in $ItemsList | Where { $null -ne $_ })
-    {
-        $i++
-        If($PSBoundParameters.ContainsKey('Runspace')){
-            If($Identifier){
-                Update-UIProgress -Runspace $Runspace -PercentComplete ($i/$ItemsList.count * 100) -StatusMsg ("[{0} of {1}] :: Adding [{2}] to list..." -f $i,$ItemsList.count,$item.$Identifier)
-                Write-UIOutput -Runspace $Runspace -UIObject $Runspace.Logging -Message ("Adding item to [{1}] {2}: {0}" -f $item.$Identifier,$Object.Name,$PSCmdlet.ParameterSetName) -Type Info
-
-                $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
+                    $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
+                        $Object.Items.Add($item) | Out-Null
+                    })
+                }
+            }
+            Else{
+                #Check to see if properties exists
+                If($Identifier){
                     $Object.Items.Add($item.$Identifier) | Out-Null
-                })
-            }
-            Else{
-                Update-UIProgress -Runspace $Runspace -PercentComplete ($i/$ItemsList.count * 100) -StatusMsg ("[{0} of {1}] :: Adding [{2}] to list..." -f $i,$ItemsList.count,$item)
-                Write-UIOutput -Runspace $Runspace -UIObject $Runspace.Logging -Message ("Adding item to [{1}] {2}: {0}" -f $item,$Object.Name,$PSCmdlet.ParameterSetName) -Type Info
-                $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
+                }
+                Else{
                     $Object.Items.Add($item) | Out-Null
+                }
+            }
+        }
+
+        If($Preselect){
+            If($PSBoundParameters.ContainsKey('Runspace')){
+                $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
+                    $Object.SelectedItem = $Preselect
                 })
-            }
-        }
-        Else{
-            #Check to see if properties exists
-            If($Identifier){
-                $Object.Items.Add($item.$Identifier) | Out-Null
-            }
-            Else{
-                $Object.Items.Add($item) | Out-Null
+            }Else{
+                $Object.SelectedItem = $Preselect
             }
         }
     }
-
-    If($PSBoundParameters.ContainsKey('Runspace')){
-        Update-UIProgress -Runspace $Runspace -PercentComplete 100 -StatusMsg ("Added {0} items to list" -f $ItemsList.count) -Color Green
-    }
-
-    If($Passthru){
-        return $Object.Items
+    End{
+        If($Passthru){
+            return $Object.Items
+        }
     }
 }
 #endregion
