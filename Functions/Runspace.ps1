@@ -102,7 +102,7 @@ Function Get-RunspaceIntuneDevices{
 
     $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
         try {
-            #$Runspace.GraphData.MDMDevices = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get -ErrorAction Stop).Value
+
             $Runspace.GraphData.MDMDevices = Invoke-IDMGraphRequests -Uri $uri -Headers $AuthToken -Passthru -ErrorAction Stop
         }
         catch {
@@ -139,6 +139,26 @@ Function Get-RunspaceIntuneDevices{
                     })
                 }
 
+                $OutputItem = New-Object PSObject
+                #first add all properties of Intune device
+                Foreach($p in $Resource | Get-Member -MemberType NoteProperty){
+                    $OutputItem | Add-Member NoteProperty $p.name -Value $Resource.($p.name)
+                }
+
+                #TEST $LinkedIntuneDevice = $Runspace.GraphData.AADDevices | Where displayName -eq 'DTOLAB-46VEYL1'
+                If($LinkedIntuneDevice = $Runspace.GraphData.AADDevices | Where deviceId -eq $Resource.azureADDeviceId){
+
+                    Foreach($p in $LinkedIntuneDevice | Get-Member -MemberType NoteProperty){
+                        switch($p.name){
+                            'id' {$OutputItem | Add-Member NoteProperty "azureADObjectId" -Value $LinkedIntuneDevice.($p.name) -Force}
+                            'deviceMetadata' {<#For internal use only.#>}
+                            'alternativeSecurityIds' {<#For internal use only.#>}
+                            default {$OutputItem | Add-Member NoteProperty $p.name -Value $LinkedIntuneDevice.($p.name) -Force}
+                        }
+                    }
+                    # Add the object to our array of output objects
+                }
+                <#
                 #Add additional Properties to devices
                 $OutputItem = New-Object PSObject
                 Foreach($p in $Resource | Get-Member -MemberType NoteProperty){
@@ -158,6 +178,7 @@ Function Get-RunspaceIntuneDevices{
                     $OutputItem | Add-Member NoteProperty "extensionAttributes " -Value $FilteredObj.extensionAttributes -Force
                     # Add the object to our array of output objects
                 }
+                #>
                 $Runspace.Data.IntuneDevices += $OutputItem
             }
         })

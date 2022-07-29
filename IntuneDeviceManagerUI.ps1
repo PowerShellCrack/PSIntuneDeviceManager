@@ -7,7 +7,7 @@
 .NOTES
     Author		: Dick Tracy II <richard.tracy@microsoft.com>
     Source	    :
-    Version		: 1.4.4
+    Version		: 1.4.7
 
 .EXAMPLE
     .\IntuneDeviceManagerUI.ps1 -DevicePrefix 'DTOHAADJ'
@@ -191,6 +191,14 @@ If($ChangeLogPath){
 #check modules
 #$ModulesNeeded = @('Microsoft.Graph.Intune','Microsoft.Graph.Authentication','Microsoft.Graph.DeviceManagement.Administration','AzureAD','WindowsAutoPilotIntune','Microsoft.Graph.Identity.DirectoryManagement')
 $ModulesNeeded = @('Az.Accounts','Microsoft.Graph.Intune','Microsoft.Graph.Authentication','AzureAD','WindowsAutopilotIntune','IDMCmdlets')
+$ModulesNeeded = @{
+    'Az.Accounts' = ''
+    'Microsoft.Graph.Intune' = ''
+    'Microsoft.Graph.Authentication' = ''
+    'AzureAD' = ''
+    'WindowsAutopilotIntune' = ''
+    'IDMCmdlets' = '1.0.0.5'
+}
 
 $ParamProps = @{
     Name = $scriptName
@@ -333,21 +341,39 @@ Function Show-UIMainWindow
         # Start populating menu content
         #=================================
         $syncHash.txtVersion.Text = $Synchash.Properties.Version
-        #TEST $Module = $ModulesNeeded[0]
+
+
         $syncHash.Data.MissingModules = @()
-        Foreach($Module in $syncHash.Properties.RequiredModules){
-            $ModuleInstalled = Get-Module -Name $Module -ListAvailable
+        #TEST $Module = $ModulesNeeded[0]
+        #TEST $Module = $syncHash.Properties.RequiredModules.GetEnumerator() | Where Name -eq 'IDMCmdlets'
+        #TEST $Module = $syncHash.Properties.RequiredModules.GetEnumerator() | Where Name -eq 'Az.Accounts'
+        Foreach($Module in $syncHash.Properties.RequiredModules.GetEnumerator()){
+            $ModuleInstalled = Get-Module -Name $Module.Name -ListAvailable
             If($null -eq $ModuleInstalled){
                 $syncHash.Data.MissingModules += $Module
-                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("Module required: {0}" -f $Module) -Type Error
-            }Else{
-                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("Module is installed: {0}" -f $Module) -Type Info
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("No module found named [{0}], module must be installed to continue" -f $Module) -Type Error
+            }
+            Else{
+                #get the latest version of module
+                $LatestModule = $ModuleInstalled | Where Version -eq ($ModuleInstalled.Version | measure -Maximum).Maximum
+                #Check version if needed
+                If(-NOT[string]::IsNullOrEmpty($Module.Value))
+                {
+                    If($LatestModule.Version -lt [version]$Module.Value){
+                        $syncHash.Data.MissingModules += $Module
+                        Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("Installed module [{0}] version is [{1}]; this script requires version [{2}]" -f $Module,$ModuleInstalled.Version.ToString(),$Module.Value) -Type Error
+                    }
+                }
+                Else{
+                    Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("Module [{0}] is installed with a version equal to or greater than [{1}] " -f $Module,$Module.Value) -Type Info
+                }
             }
         }
+
         #if required modules not installed display UI correctly
         If($syncHash.Data.MissingModules.Count -ge 1){
             $syncHash.AppModulePopup.IsOpen = $true
-            $syncHash.btnMSGraphConnect.IsEnabled = $false
+            $syncHash.btnGetIntuneDevices.IsEnabled = $false
             $syncHash.txtAzureModules.text = 'No'
         }Else{
             $syncHash.AppModulePopup.IsOpen = $false
@@ -357,20 +383,23 @@ Function Show-UIMainWindow
         $syncHash.btnAppModuleCancel.Add_Click({
             $syncHash.AppModulePopup.IsOpen = $false
         })
-        $syncHash.txtAppModuleList.text = ($syncHash.Data.MissingModules -Join ',')
+        $syncHash.txtAppModuleList.text = ($syncHash.Data.MissingModules.GetEnumerator() | %{If($_.Value){$_.Name + '[' + $_.Value + ']'}Else{$_.Name}}) -join ','
 
 
         $syncHash.btnAppModuleInstall.Add_Click({
+
+            Update-UIProgress -Runspace $synchash -StatusMsg ('Installing [{0}] modules, please wait...' -f $syncHash.Data.MissingModules.count) -Indeterminate
+
             $err=0
             #always install nuget if modules missing
-            If($syncHash.Data.MissingModules -gt 0){
+            If($syncHash.Data.MissingModules.count -gt 0){
                 Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
             }
 
-            Foreach($Module in $syncHash.Data.MissingModules){
+            Foreach($Module in $syncHash.Data.MissingModules.GetEnumerator()){
                 $syncHash.lblAppModuleMsg.Content = ("Installing module: {0}..." -f $Module)
                 Try{
-                    Install-Module -Name $Module -AllowClobber -Force -Confirm:$false
+                    Install-Module -Name $Module.Name -AllowClobber -Force -Confirm:$false
                 }Catch{
                     $err++
                     $syncHash.lblAppModuleMsg.Content = ("Failed: {0}..." -f $_.exception.message)
@@ -379,9 +408,11 @@ Function Show-UIMainWindow
             If($err -eq 0){
                 $syncHash.lblAppModuleMsg.Foreground = 'White'
                 $syncHash.lblAppModuleMsg.Content = ("Modules installed, You must restart app...")
+                Update-UIProgress -Runspace $synchash -StatusMsg ('Modules are installed, but the app needs to be restarted') -PercentComplete 100 -Color 'Green'
                 $syncHash.btnAppModuleCancel.Content = 'Ok'
             }
             Else{
+                Update-UIProgress -Runspace $synchash -StatusMsg ('Failed to install [{0}] modules' -f $err.count) -PercentComplete 100 -Color 'Red'
                 $syncHash.btnAppModuleCancel.Content = 'Close'
             }
             $syncHash.btnAppModuleInstall.Visibility = 'Hidden'
@@ -393,7 +424,7 @@ Function Show-UIMainWindow
                 $syncHash.lblAppSecretMsg.content = "Invalid Secret, please try again or cancel"
             }Else{
                 $syncHash.AppSecretPopup.IsOpen = $false
-                $syncHash.btnMSGraphConnect.IsEnabled = $true
+                $syncHash.btnGetIntuneDevices.IsEnabled = $true
             }
         })
         # Setup help menu
@@ -536,15 +567,10 @@ Function Show-UIMainWindow
             Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("PowerShell version is: {0}" -f $PSVersion.ToString()) -Type Info
         }Else{
             Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("PowerShell must be must be at version 5.1 to work properly") -Type Error
-            $syncHash.btnMSGraphConnect.IsEnabled = $false
+            $syncHash.btnGetIntuneDevices.IsEnabled = $false
             $syncHash.btnNewDeviceName.IsEnabled = $false
         }
-        #default refresh button to disabled until MSgraph sign in
-        $syncHash.btnRefreshList.IsEnabled = $false
-        # Populate config tab
-        #----------------------
-        $syncHash.txtCMSiteCode.text = $syncHash.Properties.CMSiteCode
-        $syncHash.txtCMSiteServer.text = $syncHash.Properties.CMSiteServer
+
 
         #populate dropdown for Search Option
         @('User Root OU','Computers Root OU','Computers Default OU','Custom') | Add-UIList -Runspace $syncHash -DropdownObject $syncHash.cmbSearchInOptions -Preselect 'User Root OU'
@@ -641,8 +667,8 @@ Function Show-UIMainWindow
                 }
                 ElseIf([string]::IsNullOrEmpty($syncHash.txtSearchIntuneDevices.Text)){
                     #add example back in light gray font
-                    $syncHash.txtSearchIntuneDevices.Foreground = 'Gray'
                     $syncHash.txtSearchIntuneDevices.Text = 'Search...'
+                    $syncHash.txtSearchIntuneDevices.Foreground = 'Gray'
                 }
                 Else{
                 }
@@ -763,7 +789,7 @@ Function Show-UIMainWindow
         #=================================
         If($syncHash.Properties.AppConnect){
             #Open-AppSecretPrompt
-            $syncHash.btnMSGraphConnect.IsEnabled = $false
+            $syncHash.btnGetIntuneDevices.IsEnabled = $false
             $syncHash.AppSecretPopup.IsOpen = $true
 
             $syncHash.btnPasteClipboard.Add_Click({
@@ -773,7 +799,7 @@ Function Show-UIMainWindow
             $syncHash.btnAppSecretCancel.Add_Click({
                 $syncHash.AppSecretPopup.IsOpen = $false
                 $syncHash.Properties.AppConnect = $false
-                $syncHash.btnMSGraphConnect.IsEnabled = $false
+                $syncHash.btnGetIntuneDevices.IsEnabled = $false
                 Update-UIProgress -Runspace $synchash -StatusMsg ('User cancelled app connection. Close and reopen app to try again') -PercentComplete 100 -Color 'Red'
             })
 
@@ -782,7 +808,7 @@ Function Show-UIMainWindow
                     $syncHash.lblAppSecretMsg.content = "Invalid Secret, please try again or cancel"
                 }Else{
                     $syncHash.AppSecretPopup.IsOpen = $false
-                    $syncHash.btnMSGraphConnect.IsEnabled = $true
+                    $syncHash.btnGetIntuneDevices.IsEnabled = $true
                 }
             })
         }
@@ -795,6 +821,29 @@ Function Show-UIMainWindow
         }Else{
             $syncHash.tabStale.Visibility = 'Collapsed'
         }
+        #default load option
+
+        #disable pagination on startup
+        $syncHash.btnIntuneDevicePreviousPage.Visibility = 'Hidden'
+        $syncHash.btnIntuneDeviceNextPage.Visibility = 'Hidden'
+        $syncHash.txtIntuneDevicePageStatus.Visibility = 'Hidden'
+        $syncHash.btnStaleDevicePreviousPage.Visibility = 'Hidden'
+        $syncHash.btnStaleDeviceNextPage.Visibility = 'Hidden'
+        $syncHash.txtStaleDevicePageStatus.Visibility = 'Hidden'
+        $synchash.listIntuneDevices.Height = 548
+        $synchash.listStaleDevices.Height = 546
+        <# when pagination is enabled
+            $synchash.listIntuneDevices.Height = 514
+            $synchash.listStaleDevices.Height = 514
+        #>
+        $syncHash.txtDevicePrefix.text = $syncHash.Properties.DevicePrefix
+
+        #default refresh button to disabled until MSgraph sign in
+        $syncHash.btnRefreshList.IsEnabled = $false
+        # Populate config tab
+        #----------------------
+        $syncHash.txtCMSiteCode.text = $syncHash.Properties.CMSiteCode
+        $syncHash.txtCMSiteServer.text = $syncHash.Properties.CMSiteServer
         # BUTTON CONTROLS
         #=================================
         $syncHash.btnBack.Add_Click({
@@ -802,6 +851,7 @@ Function Show-UIMainWindow
         })
 
         #get sample text and convert it using the regex rules
+
         $syncHash.btnTestSample.Add_Click({
             $TestSample = @{Query=$syncHash.txtSample.Text}
             $TestRules=@{}
@@ -821,8 +871,15 @@ Function Show-UIMainWindow
         })
 
         #action for connect button
-        $syncHash.btnMSGraphConnect.Add_Click({
+        $syncHash.btnGetIntuneDevices.Add_Click({
             $this.IsEnabled = $false
+             #clear current list
+             $syncHash.btnGetIntuneDevices.Dispatcher.Invoke("Normal",[action]{
+                $syncHash.txtSearchIntuneDevices.Foreground = 'Gray'
+                $syncHash.txtSearchIntuneDevices.Text = 'Search...'
+                $syncHash.listIntuneDevices.Items.Clear()
+            })
+
             Update-UIProgress -Runspace $synchash -StatusMsg "Connecting to Microsoft Graph Api..." -Indeterminate
 
             If($syncHash.Properties.AppConnect)
@@ -877,49 +934,45 @@ Function Show-UIMainWindow
             $syncHash.Window.Topmost = $true
             If($null -ne $syncHash.Data.AuthToken)
             {
-                #Update-UIProgress -Runspace $synchash -StatusMsg ('Searching for managed [{0}] devices...' -f $syncHash.properties.DevicePlatform) -Indeterminate
+                Update-UIProgress -Runspace $synchash -StatusMsg ('Searching for managed [{0}] devices...' -f $syncHash.properties.DevicePlatform) -Indeterminate
 
+
+                #populate Autopilot profiles
+                If($syncHash.Data.AutopilotProfile){
+                    Add-UIList -Runspace $syncHash -ItemsList $syncHash.Data.AutopilotProfile -DropdownObject $syncHash.cmbAPProfile -Identifier 'displayName'
+                }
+
+                #populate device category
+                If($syncHash.Data.DeviceCategories = Get-IDMDeviceCategory){
+                    Add-UIList -Runspace $syncHash -ItemsList $syncHash.Data.DeviceCategories -DropdownObject $syncHash.cmbDeviceCategoryList -Identifier 'displayName'
+                }
 
                 #grab all managed devices
-                #$syncHash.Window.Dispatcher.Invoke("Normal",[action]{
-                    #populate Autopilot profiles
-                    Add-UIList -Runspace $syncHash -ItemsList (Get-IDMAutopilotProfile) -DropdownObject $syncHash.cmbAPProfile -Identifier 'displayName'
-                    #populate device category
-                    Add-UIList -Runspace $syncHash -ItemsList (Get-IDMDeviceCategory) -DropdownObject $syncHash.cmbDeviceCategoryList -Identifier 'displayName'
+                #build device query
+                $DeviceParams = @{AuthToken=$syncHash.Data.AuthToken}
+                If($syncHash.Properties.DevicePlatform){
+                    $DeviceParams += @{Platform=$syncHash.Properties.DevicePlatform}
+                }
+                If($syncHash.txtDevicePrefix.text.length -gt 0){
+                    $DeviceParams += @{Filter=$syncHash.txtDevicePrefix.text}
+                }
+                #encapsulate device in array (incase there is only 1)
+                #$syncHash.Data.IntuneDevices = @(Get-IDMDevice @DeviceParams -Expand)
+                #$syncHash.Data.IntuneDevices = @()
+                #$syncHash.Data.IntuneDevices += Get-RunspaceIntuneDevices -Runspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
+                Get-RunspaceIntuneDevices -Runspace $syncHash -ParentRunspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
+                #Invoke-Command -ScriptBlock {Get-RunspaceIntuneDevices -Runspace $syncHash -ParentRunspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices} -ArgumentList @($syncHash,$DeviceParams,$syncHash.listIntuneDevices)
 
-                    #build device query
-                    $DeviceParams = @{AuthToken=$syncHash.Data.AuthToken}
-                    If($syncHash.Properties.DevicePlatform){
-                        $DeviceParams += @{Platform=$syncHash.Properties.DevicePlatform}
-                    }
-                    If($syncHash.Properties.DevicePrefix){
-                        $DeviceParams += @{Filter=$syncHash.Properties.DevicePrefix}
-                    }
-                    #encapsulate device in array (incase there is only 1)
-                    #$syncHash.Data.IntuneDevices = @(Get-IDMDevice @DeviceParams -Expand)
-                    #$syncHash.Data.IntuneDevices = @()
-                    #$syncHash.Data.IntuneDevices += Get-RunspaceIntuneDevices -Runspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
-                    Get-RunspaceIntuneDevices -Runspace $syncHash -ParentRunspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
-                    #Invoke-Command -ScriptBlock {Get-RunspaceIntuneDevices -Runspace $syncHash -ParentRunspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices} -ArgumentList @($syncHash,$DeviceParams,$syncHash.listIntuneDevices)
+                If($syncHash.Data.IntuneDevices.count -gt 0)
+                {
+                    $syncHash.tabDetails.Visibility = 'Visible'
+                    If($syncHash.Properties.AllowRename -eq $true){$syncHash.tabRenamer.Visibility = 'Visible'}
+                }
+                Else{
+                    Update-UIProgress -Runspace $synchash -StatusMsg ('No devices found') -PercentComplete 100 -Color 'Red'
+                    Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("No devices found. Log into a different Azure tenant or credentials to retrieve registered devices") -Type Error
+                }
 
-                    If($syncHash.Data.IntuneDevices.count -gt 0)
-                    {
-                        $syncHash.tabDetails.Visibility = 'Visible'
-                        If($syncHash.Properties.AllowRename -eq $true){$syncHash.tabRenamer.Visibility = 'Visible'}
-
-                        $syncHash.btnRefreshList.IsEnabled = $true
-                        $syncHash.btnNewDeviceName.IsEnabled =$true
-
-                        #Add-UIList -ItemsList $syncHash.Data.IntuneDevices -ListObject $syncHash.listIntuneDevices -Identifier 'deviceName'
-                        #Add-UIList -Runspace $syncHash -ItemsList $syncHash.Data.IntuneDevices -ListObject $syncHash.listIntuneDevices -Identifier 'deviceName'
-                    }
-                    Else{
-                        $syncHash.btnRefreshList.IsEnabled = $false
-                        $syncHash.btnNewDeviceName.IsEnabled = $false
-                        Update-UIProgress -Runspace $synchash -StatusMsg ('No devices found') -PercentComplete 100 -Color 'Red'
-                        Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("No devices found. Log into a different Azure tenant or credentials to retrieve registered devices") -Type Error
-                    }
-                #})
 
             }
             $this.IsEnabled = $true
@@ -1121,6 +1174,7 @@ Function Show-UIMainWindow
 
             #clear current list
             $syncHash.btnRefreshList.Dispatcher.Invoke("Normal",[action]{
+                $syncHash.txtSearchIntuneDevices.Foreground = 'Gray'
                 $syncHash.txtSearchIntuneDevices.Text = 'Search...'
                 $syncHash.listIntuneDevices.Items.Clear()
             })
@@ -1131,8 +1185,8 @@ Function Show-UIMainWindow
                 If($syncHash.Properties.DevicePlatform){
                     $DeviceParams += @{Platform=$syncHash.Properties.DevicePlatform}
                 }
-                If($syncHash.Properties.DevicePrefix){
-                    $DeviceParams += @{Filter=$syncHash.Properties.DevicePrefix}
+                If($syncHash.txtDevicePrefix.text.length -gt 0){
+                    $DeviceParams += @{Filter=$syncHash.txtDevicePrefix.text}
                 }
                 #refresh list
                 Get-RunspaceIntuneDevices -Runspace $syncHash -ParentRunspace $syncHash @DeviceParams -Expand -ListObject $syncHash.listIntuneDevices
@@ -1143,14 +1197,9 @@ Function Show-UIMainWindow
                 $syncHash.tabDetails.Visibility = 'Visible'
                 $syncHash.tabRenamer.Visibility = 'Visible'
 
-                $syncHash.btnRefreshList.IsEnabled = $true
-                $syncHash.btnNewDeviceName.IsEnabled =$true
-
                 Update-UIProgress -Runspace $synchash -StatusMsg ('Found {0} devices the meet platform requirement [{1}]' -f $syncHash.Data.IntuneDevices.count,$syncHash.properties.DevicePlatform) -PercentComplete 100
             }
             Else{
-                $syncHash.btnRefreshList.IsEnabled = $false
-                $syncHash.btnNewDeviceName.IsEnabled = $false
                 Update-UIProgress -Runspace $synchash -StatusMsg ('No devices found') -PercentComplete 100 -Color 'Red'
                 Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("No devices found. Log into a different Azure tenant or credentials to retrieve registered devices") -Type Error
             }
@@ -1619,12 +1668,58 @@ Function Show-UIMainWindow
 ##* MAIN
 ##*=============================================
 #Call UI and store it in same variable as runspace ($syncHash); allows easier troubleshooting
-$global:syncHash = Show-UIMainWindow -XamlFile $XAMLFilePath -StylePath $StylePath -FunctionPath $FunctionPath -Properties $ParamProps -Wait
-#Show properties UI took in
-$global:syncHash.Properties
-#show data out
-$global:syncHash.Data
-#show any UI error from isolated runspace
-$global:syncHash.Error
+$Global:syncHash = Show-UIMainWindow -XamlFile $XAMLFilePath -StylePath $StylePath -FunctionPath $FunctionPath -Properties $ParamProps -Wait
 
 $Global:AuthToken = $syncHash.Data.AuthToken
+
+If($Global:syncHash.Error){
+    Write-Host ""
+    Write-Host "UI ERRORS:" -ForegroundColor Red
+    Write-Host "==================================================================" -ForegroundColor Red
+    $Global:syncHash.Error
+}
+
+Write-Host ""
+Write-Host "Global variable now available after UI closed:" -ForegroundColor Cyan
+Write-Host "==================================================================" -ForegroundColor Cyan
+Write-Host "Get all properties of UI, run command:" -ForegroundColor DarkGray
+Write-Host "`$Global:syncHash" -ForegroundColor Green
+Write-Host ""
+Write-Host "Get current graph token, run command:" -ForegroundColor DarkGray
+Write-Host "`$Global:AuthToken" -ForegroundColor Green
+Write-Host ""
+Write-Host "Useful UI outputs:" -ForegroundColor Cyan
+Write-Host "==================================================================" -ForegroundColor Cyan
+Write-Host "To review specified properties, run command:" -ForegroundColor DarkGray
+Write-Host "`$Global:syncHash" -ForegroundColor Green -NoNewline
+Write-Host ".Properties" -ForegroundColor White
+Write-Host ""
+Write-Host "To review the data output of UI, run command:" -ForegroundColor DarkGray
+Write-Host "`$Global:syncHash" -ForegroundColor Green -NoNewline
+Write-Host ".Data" -ForegroundColor White
+Write-Host ""
+Write-Host "To review all listed devices shown in UI, run command:" -ForegroundColor DarkGray
+Write-Host "`$Global:syncHash" -ForegroundColor Green -NoNewline
+Write-Host ".Data.IntuneDevice" -ForegroundColor White
+Write-Host ""
+Write-Host "To review details of last selected device, run command:" -ForegroundColor DarkGray
+Write-Host "`$Global:syncHash" -ForegroundColor Green -NoNewline
+Write-Host ".Data.SelectedDevice" -ForegroundColor White
+Write-Host ""
+Write-Host "To review selected device user details, run command:" -ForegroundColor DarkGray
+Write-Host "`$Global:syncHash" -ForegroundColor Green -NoNewline
+Write-Host ".Data.AssignedUser" -ForegroundColor White
+Write-Host ""
+If($Global:syncHash.AssignmentWindow.DeviceAssignments.count -gt 0){
+    Write-Host "To review selected device assignments, run command:" -ForegroundColor DarkGray
+    Write-Host "`$Global:syncHash" -ForegroundColor Green -NoNewline
+    Write-Host ".AssignmentWindow.DeviceAssignments" -ForegroundColor White
+    Write-Host ""
+}
+If($Global:syncHash.AssignmentWindow.UserAssignments.count -gt 0){
+    Write-Host "To review selected device user assignments, run command:" -ForegroundColor DarkGray
+    Write-Host "`$Global:syncHash" -ForegroundColor Green -NoNewline
+    Write-Host ".AssignmentWindow.UserAssignments" -ForegroundColor White
+    Write-Host ""
+}
+Write-Host "==================================================================" -ForegroundColor Cyan

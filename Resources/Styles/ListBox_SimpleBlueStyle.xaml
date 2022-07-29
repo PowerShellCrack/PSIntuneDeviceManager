@@ -5,7 +5,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListBox">
-                    <Border Name="Border" BorderThickness="1" CornerRadius="2">
+                    <Border Name="Border" BorderThickness="1" CornerRadius="2" BorderBrush="#bcd4e6">
                         <ScrollViewer Margin="0" Focusable="false">
                             <StackPanel Margin="2" IsItemsHost="True" />
                         </ScrollViewer>

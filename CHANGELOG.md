@@ -1,5 +1,12 @@
 # Change log for IntuneDeviceManagerUI.ps1
 
+## 1.4.7 - July 29, 2022
+
+- Added device prefix change within UI; allows search without restart UI (thanks smithc)
+- Changed some button names and added pagination menu; still work in progress
+- Moved Stale device tab behind Renamer tab; made use of white space by adjusting login info
+- Added descriptive output for data analytics.
+
 ## 1.4.6 - July 28, 2022
 
 - Formatted device hardware retrieval to be more readable
