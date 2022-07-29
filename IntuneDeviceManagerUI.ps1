@@ -911,7 +911,7 @@ Function Show-UIMainWindow
             Else{
                 #minimize the UI to allow for login
                 $syncHash.Window.WindowState = 'Minimized'
-                $syncHash.Data.ConnectedUPN = (Connect-MSGraph -AdminConsent).UPN
+                $syncHash.Data.ConnectedUPN = (Connect-MSGraph).UPN
                 $syncHash.Data.AuthToken = (Get-IDMGraphAuthToken -User $syncHash.Data.ConnectedUPN)
                 Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("Connected to MSGraph using account: {0}" -f $syncHash.Data.ConnectedUPN) -Type Start
             }
