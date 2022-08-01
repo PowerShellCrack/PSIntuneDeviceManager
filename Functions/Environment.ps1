@@ -104,7 +104,8 @@ function Test-RSATModule {
 function Test-CMModule {
     #https://docs.microsoft.com/en-us/powershell/sccm/overview?view=sccm-ps
     param(
-	    [string]$CMSite
+	    [string]$CMSite,
+        [string]$CMServer
 	)
     $CMPath = 'C:\Program Files (x86)\Microsoft Endpoint Manager\AdminConsole\bin'
 
@@ -118,15 +119,29 @@ function Test-CMModule {
     If ($CM) {
         If($CMSite){
             Try{
-                Set-Location "$CMSite`:"
-                #New-PSDrive -Name $CMSite `
-                #    -PSProvider "AdminUI.PS.Provider\$CMSite" `
-                #    -Root $CMServer `
-                #    -ErrorAction Stop
+                # Customizations
+                $initParams = @{}
+                #$initParams.Add("Verbose", $true) # Uncomment this line to enable verbose logging
+                #$initParams.Add("ErrorAction", "Stop") # Uncomment this line to stop the script on any errors
+
+                # Do not change anything below this line
+
+                # Import the ConfigurationManager.psd1 module 
+                if((Get-Module ConfigurationManager) -eq $null) {
+                    Import-Module "$($ENV:SMS_ADMIN_UI_PATH)\..\ConfigurationManager.psd1" @initParams 
+                }
+
+                # Connect to the site's drive if it is not already present
+                if((Get-PSDrive -Name $CMSite -PSProvider CMSite -ErrorAction SilentlyContinue) -eq $null) {
+                    New-PSDrive -Name $CMSite -PSProvider CMSite -Root $CMServer @initParams
+                }
+
+                # Set the current location to be the site code.
+                Set-Location "$($CMSite):\" @initParams
             }
-            Catch{}
+            Catch{Return $False}
             Finally{
-                $CM.Version
+
             }
         }Else{
             return $true

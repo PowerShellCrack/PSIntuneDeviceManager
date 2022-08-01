@@ -7,7 +7,7 @@
 .NOTES
     Author		: Dick Tracy II <richard.tracy@microsoft.com>
     Source	    :
-    Version		: 1.4.7
+    Version		: 1.4.8
 
 .EXAMPLE
     .\IntuneDeviceManagerUI.ps1 -DevicePrefix 'DTOHAADJ'
@@ -188,16 +188,14 @@ If($ChangeLogPath){
     [string]$Version = [version]$Changedetails[0]
     [string]$MenuDate = $Changedetails[1]
 }
-#check modules
-#$ModulesNeeded = @('Microsoft.Graph.Intune','Microsoft.Graph.Authentication','Microsoft.Graph.DeviceManagement.Administration','AzureAD','WindowsAutoPilotIntune','Microsoft.Graph.Identity.DirectoryManagement')
-$ModulesNeeded = @('Az.Accounts','Microsoft.Graph.Intune','Microsoft.Graph.Authentication','AzureAD','WindowsAutopilotIntune','IDMCmdlets')
+#check modules and the MINIMUM modules needed
 $ModulesNeeded = @{
-    'Az.Accounts' = ''
-    'Microsoft.Graph.Intune' = ''
-    'Microsoft.Graph.Authentication' = ''
-    'AzureAD' = ''
-    'WindowsAutopilotIntune' = ''
-    'IDMCmdlets' = '1.0.0.5'
+    'Az.Accounts' = '2.9.0'
+    'Microsoft.Graph.Intune' = '6.1907.1.0'
+    'Microsoft.Graph.Authentication' = '1.9.3'
+    'AzureAD' = '2.0.2.140'
+    'WindowsAutopilotIntune' = '5.0'
+    'IDMCmdlets' = '1.0.0.7'
 }
 
 $ParamProps = @{
@@ -304,11 +302,14 @@ Function Show-UIMainWindow
         . "$FunctionPath\Logging.ps1"
         . "$FunctionPath\Environment.ps1"
         . "$FunctionPath\DeviceInfo.ps1"
-        #. "$FunctionPath\MSgraph.ps1"
-        #. "$FunctionPath\Intune.ps1"
-        #. "$FunctionPath\Autopilot.ps1"
         . "$FunctionPath\Runspace.ps1"
         . "$FunctionPath\UIControls.ps1"
+        . "$FunctionPath\UIHandlers.ps1"
+        . "$FunctionPath\UIHelpMenu.ps1"
+        #DELETE THIS LATER
+        #. "$FunctionPath\IDMGraph.ps1"
+        #. "$FunctionPath\IDM.ps1"
+        #. "$FunctionPath\IDMAutopilot.ps1"
         # INNER  FUNCTIONS
         #=================================
         If(Test-IsISE){
@@ -342,7 +343,6 @@ Function Show-UIMainWindow
         #=================================
         $syncHash.txtVersion.Text = $Synchash.Properties.Version
 
-
         $syncHash.Data.MissingModules = @()
         #TEST $Module = $ModulesNeeded[0]
         #TEST $Module = $syncHash.Properties.RequiredModules.GetEnumerator() | Where Name -eq 'IDMCmdlets'
@@ -374,20 +374,19 @@ Function Show-UIMainWindow
         If($syncHash.Data.MissingModules.Count -ge 1){
             $syncHash.AppModulePopup.IsOpen = $true
             $syncHash.btnGetIntuneDevices.IsEnabled = $false
-            $syncHash.txtAzureModules.text = 'No'
+
         }Else{
             $syncHash.AppModulePopup.IsOpen = $false
-            $syncHash.txtAzureModules.text = 'Yes'
-            $syncHash.txtAzureModules.Foreground = 'Green'
         }
+
         $syncHash.btnAppModuleCancel.Add_Click({
             $syncHash.AppModulePopup.IsOpen = $false
         })
+
         $syncHash.txtAppModuleList.text = ($syncHash.Data.MissingModules.GetEnumerator() | %{If($_.Value){$_.Name + '[' + $_.Value + ']'}Else{$_.Name}}) -join ','
 
 
         $syncHash.btnAppModuleInstall.Add_Click({
-
             Update-UIProgress -Runspace $synchash -StatusMsg ('Installing [{0}] modules, please wait...' -f $syncHash.Data.MissingModules.count) -Indeterminate
 
             $err=0
@@ -427,90 +426,17 @@ Function Show-UIMainWindow
                 $syncHash.btnGetIntuneDevices.IsEnabled = $true
             }
         })
-        # Setup help menu
-        #=================================
-        $syncHash.tbADSearchHelp.Add_MouseEnter({
-            $PopupContexts = @{
-                Help = @("Select the AD search field to determine where computer objects are locate."
-                        "The filter can be used during OU Search")
-            }
-            Add-PopupContent -FlowDocumentObject $syncHash.PopupContent -ContextHash $PopupContexts
-            $syncHash.HelpPopup.VerticalOffset="50"
-            $syncHash.HelpPopup.Placement="Right"
-            $syncHash.HelpPopup.IsOpen = $true
-        })
-        $syncHash.tbADSearchHelp.Add_MouseLeave({
-            $syncHash.HelpPopup.IsOpen = $false
-            Clear-PopupContent -FlowDocumentObject $syncHash.PopupContent
-        })
-        $syncHash.tbCMSiteSearchHelp.Add_MouseEnter({
-            $PopupContexts = @{
-                Help = @("Fill in CM site server and Site code to connect to ConfigMgr")
-                Tip = @("Specify the attribute used to determine if device is a match")
-            }
-            Add-PopupContent -FlowDocumentObject $syncHash.PopupContent -ContextHash $PopupContexts
-            $syncHash.HelpPopup.VerticalOffset="240"
-            $syncHash.HelpPopup.Placement="Right"
-            $syncHash.HelpPopup.IsOpen = $true
-        })
-        $syncHash.tbCMSiteSearchHelp.Add_MouseLeave({
-            $syncHash.HelpPopup.IsOpen = $false
-            Clear-PopupContent -FlowDocumentObject $syncHash.PopupContent
-        })
-        $syncHash.tbMoveOUHelp.Add_MouseEnter({
-            $PopupContexts = @{
-                Help = @("Select an option on how to move the device to an OU.")
-                Tip = @("Specify an OU in LDAP format")
-            }
-            Add-PopupContent -FlowDocumentObject $syncHash.PopupContent -ContextHash $PopupContexts
-            $syncHash.HelpPopup.VerticalOffset="340"
-            $syncHash.HelpPopup.Placement="Left"
-            $syncHash.HelpPopup.IsOpen = $true
-        })
-        $syncHash.tbMoveOUHelp.Add_MouseLeave({
-            $syncHash.HelpPopup.IsOpen = $false
-            Clear-PopupContent -FlowDocumentObject $syncHash.PopupContent
-        })
-        $syncHash.tbRuleTesterHelp.Add_MouseEnter({
-            $PopupContexts = @{
-                Help = @("This is a test tool that allow you to test the configurations")
-                Note = @("Rule tester ignores AD Search filter and Method options.","Digits are simulated")
-            }
-            Add-PopupContent -FlowDocumentObject $syncHash.PopupContent -ContextHash $PopupContexts
-            $syncHash.HelpPopup.VerticalOffset="380"
-            $syncHash.HelpPopup.Placement="Left"
-            $syncHash.HelpPopup.IsOpen = $true
-        })
-        $syncHash.tbRuleTesterHelp.Add_MouseLeave({
-            $syncHash.HelpPopup.IsOpen = $false
-            Clear-PopupContent -FlowDocumentObject $syncHash.PopupContent
-        })
-        $syncHash.tbRuleGenHelp.Add_MouseEnter({
-            $PopupContexts = @{
-                Help = @("Select an attribute to query from to build base for device name"
-                        "Use regex rule to further evaluate the value from the method selected; each rule extracts a value then concatenates"
-                        "Select Abbreviations type to add a dynamic character(s) to name. This can be controlled by Abbr key rules."
-                        "Set Rules. Rules must be in Key=Value pair and each set must be separated by commas."
-                        "Select where to place the Abbreviation within the name."
-                        "Select how many digits will be added to the name. This is ignored if increment option is enabled"
-                        "Select where the digits should be added to the name ")
-                Note = @( "Prefix will add characters to front of name","If no rules are set, first three characters of evaluated type will be used.")
-            }
-            Add-PopupContent -FlowDocumentObject $syncHash.PopupContent -ContextHash $PopupContexts
-            $syncHash.HelpPopup.VerticalOffset="50"
-            $syncHash.HelpPopup.Placement="Left"
-            $syncHash.HelpPopup.IsOpen = $true
-        })
-        $syncHash.tbRuleGenHelp.Add_MouseLeave({
-            $syncHash.HelpPopup.IsOpen = $false
-            Clear-PopupContent -FlowDocumentObject $syncHash.PopupContent
-        })
+
         #attempt to auto populate site server info
         If($syncHash.Properties.CMSiteCode){
-            $syncHash.txtCMSiteCode.text = $syncHash.Properties.CMSiteCode
+            #do nothing
+        }ElseIf(Test-Path HKCU:\SOFTWARE\Microsoft\ConfigMgr10\AdminUI\MRU\1){
+            $syncHash.Properties.CMSiteCode = Get-ItemProperty HKCU:\SOFTWARE\Microsoft\ConfigMgr10\AdminUI\MRU\1 | Select -ExpandProperty SiteCode -ErrorAction SilentlyContinue
+            $syncHash.Properties.CMSiteServer = Get-ItemProperty HKCU:\SOFTWARE\Microsoft\ConfigMgr10\AdminUI\MRU\1 | Select -ExpandProperty ServerName -ErrorAction SilentlyContinue
         }Else{
-            $syncHash.txtCMSiteCode.text = Get-CMSiteCode
+            # Do nothing
         }
+
         $syncHash.spViewAppSecret.Add_MouseEnter({
             $syncHash.txtAppSecret.text = $syncHash.pwdAppSecret.Password
             $syncHash.pwdAppSecret.Visibility = 'Hidden'
@@ -549,12 +475,12 @@ Function Show-UIMainWindow
         If(Test-CMModule){
             $syncHash.txtCMModule.text = 'Yes';$syncHash.txtCMModule.Foreground = 'Green'
             Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("Configuration Manager PowerShell module is installed") -Type Info
-            $syncHash.btnCMSiteSync.IsEnabled = $true
+            #$syncHash.btnCMSiteSync.IsEnabled = $true
         }
         Else{
             Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("Configuration Manager PowerShell module must be installed to be able to query CM device names") -Type Error
             $syncHash.txtCMModule.text = 'No'
-            $syncHash.btnCMSiteSync.IsEnabled = $False
+            #$syncHash.btnCMSiteSync.IsEnabled = $False
         }
 
         # Get PowerShell Version
@@ -579,8 +505,6 @@ Function Show-UIMainWindow
         #populate dropdown for Query Rule
         @('User OU Name','User Name','User Display Name','Device Name','Device SerialNumber','Device AssetTag','Random') | Add-UIList -Runspace $syncHash -DropdownObject $syncHash.cmbQueryRule -Preselect 'User OU Name'
 
-        #populate dropdown for Site Attribute
-        @('SerialNumber','MacAddress','LastLoggedOnUser','AssetTag') | Add-UIList -Runspace $syncHash -DropdownObject $syncHash.cmbCMSiteAttribute -Preselect 'SerialNumber'
         If(-Not(Test-RSATModule) -or -Not(Test-IsDomainJoined)){
             $syncHash.chkNewDeviceNameMoveOU.Visibility = 'Hidden'
             $syncHash.cmbOUOptions.IsEnabled = $false
@@ -603,6 +527,18 @@ Function Show-UIMainWindow
             $syncHash.chkDoRegex.IsChecked = $false
             (Get-UIProperty -HashName $syncHash "txtRuleRegex" -Wildcard) | Set-UIElement -Enable:$false -ErrorAction SilentlyContinue
         }
+
+        #set text area to enabled if checked
+        $syncHash.chkDoRegex.add_Checked({
+            (Get-UIProperty -HashName $syncHash "txtRuleRegex" -Wildcard) | Set-UIElement -Enable:$true -ErrorAction SilentlyContinue
+        })
+
+        #set text area to disabled if checked
+        $syncHash.chkDoRegex.add_Unchecked({
+            (Get-UIProperty -HashName $syncHash "txtRuleRegex" -Wildcard) | Set-UIElement -Enable:$false -ErrorAction SilentlyContinue
+            #(Get-UIProperty -HashName $syncHash "txtRuleRegex" -Wildcard) | Set-UIElement -text $null -ErrorAction SilentlyContinue
+        })
+
         $syncHash.txtRulePrefix.text = $syncHash.Properties.Prefix
         $syncHash.txtRuleAbbrKey.text = $syncHash.Properties.AbbrKey
 
@@ -643,83 +579,6 @@ Function Show-UIMainWindow
                         }
                     })
             }
-        })
-
-        #PROCESS ON PAGE LOAD
-        # -------------------------------------------
-        #Grab the text value when cursor leaves (AFTER Typed)
-        $syncHash.txtSearchIntuneDevices.AddHandler(
-            [System.Windows.Controls.Primitives.TextBoxBase]::GotFocusEvent,
-            [System.Windows.RoutedEventHandler]{
-                #set a variable if there is text in field BEFORE the new name is typed
-                If($syncHash.txtSearchIntuneDevices.Text){
-                    $script:SearchText = $syncHash.txtSearchIntuneDevices.Text
-                }
-            }
-        )
-
-        $syncHash.txtSearchIntuneDevices.AddHandler(
-            [System.Windows.Controls.Primitives.TextBoxBase]::LostFocusEvent,
-            [System.Windows.RoutedEventHandler]{
-                #because there is a example text field in the box by default, check for that
-                If($syncHash.txtSearchIntuneDevices.Text -eq 'Search...'){
-                    $script:SearchText = $syncHash.txtSearchIntuneDevices.Text
-                }
-                ElseIf([string]::IsNullOrEmpty($syncHash.txtSearchIntuneDevices.Text)){
-                    #add example back in light gray font
-                    $syncHash.txtSearchIntuneDevices.Text = 'Search...'
-                    $syncHash.txtSearchIntuneDevices.Foreground = 'Gray'
-                }
-                Else{
-                }
-            }
-        )
-
-        #ACTIVATE LIVE SEARCH
-        $syncHash.txtSearchIntuneDevices.AddHandler(
-            [System.Windows.Controls.Primitives.TextBoxBase]::TextChangedEvent,
-            [System.Windows.RoutedEventHandler]{
-                If(-not([string]::IsNullOrEmpty($syncHash.txtSearchIntuneDevices.Text)) -and ($syncHash.txtSearchIntuneDevices.Text -ne 'Search...')){
-                    Search-UIDeviceList -ItemsList $syncHash.Data.IntuneDevices -ListObject $syncHash.listIntuneDevices -Identifier 'deviceName' -filter $syncHash.txtSearchIntuneDevices.Text
-                }
-            }
-        )
-
-        #Textbox placeholder remove default text when textbox is being used
-        $syncHash.txtSearchIntuneDevices.Add_GotFocus({
-            #if it has an example
-            if ($syncHash.txtSearchIntuneDevices.Text -eq 'Search...') {
-                #clear value and make it black bold ready for input
-                $syncHash.txtSearchIntuneDevices.Text = ''
-                $syncHash.txtSearchIntuneDevices.Foreground = 'Black'
-                #should be black while typing....
-            }
-            #if it does not have an example
-            Else{
-                #ensure test is black and medium
-                $syncHash.txtSearchIntuneDevices.Foreground = 'Black'
-            }
-        })
-
-        #Textbox placeholder grayed out text when textbox empty and not in being used
-        $syncHash.txtSearchIntuneDevices.Add_LostFocus({
-            #if text is null (after it has been clicked on which cleared by the Gotfocus event)
-            if ($syncHash.txtSearchIntuneDevices.Text -eq '') {
-                #add example back in light gray font
-                $syncHash.txtSearchIntuneDevices.Foreground = 'Gray'
-                $syncHash.txtSearchIntuneDevices.Text = 'Search...'
-            }
-        })
-
-        #set text area to enabled if checked
-        $syncHash.chkDoRegex.add_Checked({
-            (Get-UIProperty -HashName $syncHash "txtRuleRegex" -Wildcard) | Set-UIElement -Enable:$true -ErrorAction SilentlyContinue
-        })
-
-        #set text area to disabled if checked
-        $syncHash.chkDoRegex.add_Unchecked({
-            (Get-UIProperty -HashName $syncHash "txtRuleRegex" -Wildcard) | Set-UIElement -Enable:$false -ErrorAction SilentlyContinue
-            #(Get-UIProperty -HashName $syncHash "txtRuleRegex" -Wildcard) | Set-UIElement -text $null -ErrorAction SilentlyContinue
         })
 
         $syncHash.cmbOUOptions.Add_SelectionChanged({
@@ -838,12 +697,12 @@ Function Show-UIMainWindow
         #>
         $syncHash.txtDevicePrefix.text = $syncHash.Properties.DevicePrefix
 
-        #default refresh button to disabled until MSgraph sign in
+        #set button to disabled until an actions happens
         $syncHash.btnRefreshList.IsEnabled = $false
-        # Populate config tab
-        #----------------------
-        $syncHash.txtCMSiteCode.text = $syncHash.Properties.CMSiteCode
-        $syncHash.txtCMSiteServer.text = $syncHash.Properties.CMSiteServer
+        $syncHash.btnAssignUser.IsEnabled = $false
+        $syncHash.btnHardwareDeviceInfo.IsEnabled = $false
+        $syncHash.btnViewIntuneAssignments.IsEnabled = $false
+        $syncHash.btnCMSiteSync.IsEnabled = $false
         # BUTTON CONTROLS
         #=================================
         $syncHash.btnBack.Add_Click({
@@ -919,14 +778,14 @@ Function Show-UIMainWindow
             #globalize token for function usage
             $Global:AuthToken = $syncHash.Data.AuthToken
             $syncHash.txtGraphConnectAs.text = $syncHash.Data.ConnectedUPN
+            $syncHash.txtGraphConnectAs.Foreground = 'Green'
             $syncHash.txtAuthTokenExpireDate.text = $syncHash.Data.AuthToken.ExpiresOn
 
 
             If($null -ne $syncHash.Data.ConnectedUPN){
                 Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("Successfully connected to Azure AD with Auth Token: {0}" -f ($syncHash.Data.AuthToken.Authorization).replace('Bearer','').Trim()) -Type Start
-                $syncHash.txtMSGraphConnected.Text = 'Yes'
-                $syncHash.txtMSGraphConnected.Foreground = 'Green'
                 $syncHash.btnRefreshList.IsEnabled = $true
+                $syncHash.btnGetUsers.IsEnabled = $true
             }
 
             #Put window back to its normal size if minimized
@@ -936,10 +795,9 @@ Function Show-UIMainWindow
             {
                 Update-UIProgress -Runspace $synchash -StatusMsg ('Searching for managed [{0}] devices...' -f $syncHash.properties.DevicePlatform) -Indeterminate
 
-
                 #populate Autopilot profiles
-                If($syncHash.Data.AutopilotProfile){
-                    Add-UIList -Runspace $syncHash -ItemsList $syncHash.Data.AutopilotProfile -DropdownObject $syncHash.cmbAPProfile -Identifier 'displayName'
+                If($syncHash.Data.AutopilotProfiles = Get-IDMAutopilotProfile){
+                    Add-UIList -Runspace $syncHash -ItemsList $syncHash.Data.AutopilotProfiles -DropdownObject $syncHash.cmbAPProfile -Identifier 'displayName'
                 }
 
                 #populate device category
@@ -968,11 +826,21 @@ Function Show-UIMainWindow
                     $syncHash.tabDetails.Visibility = 'Visible'
                     If($syncHash.Properties.AllowRename -eq $true){$syncHash.tabRenamer.Visibility = 'Visible'}
                 }
-                Else{
-                    Update-UIProgress -Runspace $synchash -StatusMsg ('No devices found') -PercentComplete 100 -Color 'Red'
-                    Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("No devices found. Log into a different Azure tenant or credentials to retrieve registered devices") -Type Error
-                }
 
+                If($syncHash.Data.IntuneDevices.count -eq 0)
+                {
+                    Update-UIProgress -Runspace $synchash -StatusMsg ('No devices found') -PercentComplete 100 -Color 'Red'
+                    Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("No managed devices found. Log into a different Azure tenant or credentials to retrieve managed devices") -Type Error
+                }
+                ElseIf($syncHash.Data.IntuneDevices.count -gt 1000){
+                    Update-UIProgress -Runspace $synchash -StatusMsg ("WARNING: More than 1000 devices were found! Use prefix to reduce search criteria and click the cloud sync button again") -PercentComplete 100 -Color 'Red'
+                }
+                ElseIf(($syncHash.txtDevicePrefix.text.length -ge 1)){
+                    Update-UIProgress -Runspace $synchash -StatusMsg ('Found {0} managed devices based on criteria [Search device prefix that starts with "{1}"]' -f $syncHash.Data.IntuneDevices.count,$syncHash.txtDevicePrefix.text) -PercentComplete 100 -Color 'Green'
+                }
+                Else{
+                    Update-UIProgress -Runspace $synchash -StatusMsg ('Found {0} managed devices' -f $syncHash.Data.IntuneDevices.count) -PercentComplete 100 -Color 'Green'
+                }
 
             }
             $this.IsEnabled = $true
@@ -983,6 +851,7 @@ Function Show-UIMainWindow
         #Update UI when Device is selected
         $syncHash.listIntuneDevices.Add_SelectionChanged({
             $syncHash.btnViewIntuneAssignments.IsEnabled = $True
+            $syncHash.btnHardwareDeviceInfo.IsEnabled = $True
             $syncHash.txtSelectedDevice.text = $syncHash.listIntuneDevices.SelectedItem
             If($syncHash.listIntuneDevices.SelectedItem.length -gt 0)
             {
@@ -992,7 +861,7 @@ Function Show-UIMainWindow
                 $syncHash.cmbDeviceCategoryList.SelectedItem = $syncHash.Data.SelectedDevice.deviceCategoryDisplayName
 
                 If($syncHash.Data.SelectedDevice.userPrincipalName){
-                    $syncHash.Data.AssignedUser = Get-IDMDeviceAADUser -UPN $syncHash.Data.SelectedDevice.userPrincipalName
+                    $syncHash.Data.AssignedUser = Get-IDMAzureUser -UPN $syncHash.Data.SelectedDevice.userPrincipalName
                 }Else{
                     $syncHash.Data.AssignedUser = $null
                 }
@@ -1099,10 +968,15 @@ Function Show-UIMainWindow
                     $syncHash.lblDeviceAutopilotedStatus.Foreground = 'Black'
                     $syncHash.txtDeviceAutopilotedStatus.Foreground = 'Green'
                     $syncHash.txtDeviceAutopilotedStatus.Text = 'Online Profile'
+                }ElseIf($syncHash.Data.AutopilotDevice){
+                    $syncHash.lblDeviceAutopilotedStatus.Foreground = 'Black'
+                    $syncHash.txtDeviceAutopilotedStatus.Foreground = 'Blue'
+                    $syncHash.txtDeviceAutopilotedStatus.Text = $syncHash.Data.AutopilotDevice.deploymentProfileAssignmentStatus
                 }ElseIf($syncHash.Data.SelectedDevice.enrollmentProfileName -like 'OfflineAutopilotprofile*'){
                     $syncHash.lblDeviceAutopilotedStatus.Foreground = 'Black'
                     $syncHash.txtDeviceAutopilotedStatus.Foreground = 'Blue'
                     $syncHash.txtDeviceAutopilotedStatus.Text = 'Offline JSON'
+                    $syncHash.cmbAPProfile.SelectedItem = ($syncHash.Data.AutopilotProfiles | Where id -eq ($syncHash.Data.SelectedDevice.enrollmentProfileName -replace 'OfflineAutopilotprofile-','')).displayName
                 }Else{
                     $syncHash.lblDeviceAutopilotedStatus.Foreground = 'Gray'
                     $syncHash.txtDeviceAutopilotedStatus.Foreground = 'Gray'
@@ -1211,7 +1085,7 @@ Function Show-UIMainWindow
             $this.IsEnabled = $false
             $syncHash.btnAPProfileChange.Dispatcher.Invoke("Normal",[action]{
                 If($syncHash.cmbAPProfile.SelectedItem){
-                    $SelectedAPProfile = Get-IDMAutopilotProfile | where DisplayName -eq $syncHash.cmbAPProfile.SelectedItem
+                    $SelectedAPProfile = $syncHash.Data.AutopilotProfiles | where DisplayName -eq $syncHash.cmbAPProfile.SelectedItem
                     $SelectedAPProfile | ConvertTo-AutopilotConfigurationJSON | Out-File "$env:UserProfile\Desktop\AutopilotConfigurationFile.json" -Encoding ASCII -Force
 
                     $Message=("Autopilot Profile [{0}] was exported to: [{1}]" -f $SelectedAPProfile.displayName,"$env:UserProfile\Desktop\AutopilotConfigurationFile.json")
@@ -1232,7 +1106,7 @@ Function Show-UIMainWindow
                         }
                         Catch{
                             $syncHash.txtStatus.Foreground = 'Red'
-                            $syncHash.txtStatus.Text =('{1}' -f $_.exception.message)
+                            $syncHash.txtStatus.Text =('{0}' -f $_.exception.message)
                         }
 
                         $DeviceData = New-Object PSObject
@@ -1299,7 +1173,7 @@ Function Show-UIMainWindow
                     $syncHash.txtStatus.Text = 'You must select a device first from the Device Tab'
                 }
             })
-            Update-UIProgress -Runspace $synchash -StatusMsg ("Hardware information retrieved successfully for device [{0}]!" -f $syncHash.Data.SelectedDevice.deviceName) -PercentComplete 100
+            Update-UIProgress -Runspace $synchash -StatusMsg ("Hardware information retrieved successfully for device [{0}]" -f $syncHash.Data.SelectedDevice.deviceName) -PercentComplete 100
             $this.IsEnabled = $true
         })
 
@@ -1314,13 +1188,17 @@ Function Show-UIMainWindow
             }
         })
 
-        # Update Category
-        #========================
         $syncHash.btnDeviceCategoryChange.Add_Click({
             $syncHash.btnDeviceCategoryChange.Dispatcher.Invoke("Normal",[action]{
-                Set-IDMDeviceCategory -DeviceID $syncHash.Data.SelectedDevice.id -Category $syncHash.cmbDeviceCategoryList.SelectedItem
-                $syncHash.txtStatus.Foreground = 'Green'
-                $syncHash.txtStatus.Text = ("Updated device [{0}] category to [{1}]" -f $syncHash.Data.SelectedDevice.deviceName,$syncHash.cmbDeviceCategoryList.SelectedItem)
+                Try{
+                    Set-IDMDeviceCategory -DeviceID $syncHash.Data.SelectedDevice.id -Category $syncHash.cmbDeviceCategoryList.SelectedItem
+                    $syncHash.txtStatus.Foreground = 'Green'
+                    $syncHash.txtStatus.Text = ("Updated device [{0}] category to [{1}]" -f $syncHash.Data.SelectedDevice.deviceName,$syncHash.cmbDeviceCategoryList.SelectedItem)
+                }Catch{
+                    $syncHash.txtStatus.Foreground = 'Red'
+                    $syncHash.txtStatus.Text = ("Failed to assign category [{0}] to device [{1}]. {2}" -f $syncHash.cmbDeviceCategoryList.SelectedItem,$syncHash.Data.SelectedDevice.deviceName, $_.exception.message)
+                }
+
             })
 
         })
@@ -1329,48 +1207,163 @@ Function Show-UIMainWindow
         #============================
         $syncHash.btnAPProfileChange.Add_Click({
             $syncHash.btnAPProfileChange.Dispatcher.Invoke("Normal",[action]{
-                Set-IDMAutopilotDeviceTag -AutopilotID $syncHash.Data.AutopilotDevice.id -GroupTag $syncHash.txtAPProfileGroupTag.text
-                $syncHash.txtStatus.Foreground = 'Green'
-                $syncHash.txtStatus.Text = ("Updated Autopilot device [{0}] group tag to [{1}]" -f $syncHash.Data.SelectedDevice.deviceName,$syncHash.txtAPProfileGroupTag.text)
+                Try{
+                    Set-IDMAutopilotDeviceTag -AutopilotID $syncHash.Data.AutopilotDevice.id -GroupTag $syncHash.txtAPProfileGroupTag.text
+                    $syncHash.txtStatus.Foreground = 'Green'
+                    $syncHash.txtStatus.Text = ("Updated Autopilot device [{0}] group tag to [{1}]" -f $syncHash.Data.SelectedDevice.deviceName,$syncHash.txtAPProfileGroupTag.text)
+                }Catch{
+                    $syncHash.txtStatus.Foreground = 'Red'
+                    $syncHash.txtStatus.Text = ("Failed to assign group tag [{0}] to device [{1}]. {2}" -f $syncHash.txtAPProfileGroupTag.text,$syncHash.Data.SelectedDevice.deviceName, $_.exception.message)
+                }
             })
+        })
+
+        # Retrieve users
+        #============================
+        $syncHash.btnGetUsers.Add_Click({
+            $this.IsEnabled = $false
+            Update-UIProgress -Runspace $synchash -StatusMsg ('Retrieving Azure Users...') -Indeterminate -Color Blue
+
+            #clear current list
+            $syncHash.btnGetUsers.Dispatcher.Invoke("Normal",[action]{
+                $syncHash.listUsers.Items.Clear()
+            })
+
+            #search all users or if filtered
+            If(($syncHash.txtDevicePrefix.text.length -gt 0) -and ($syncHash.txtSearchUser.text -ne 'Search...')){
+                $syncHash.Data.AzureUsers = Get-IDMAzureUsers -Filter $syncHash.txtSearchUser.text -FilterBy SearchDisplayName
+            }Else{
+                $syncHash.Data.AzureUsers = Get-IDMAzureUsers
+            }
+
+            Add-UIList -ItemsList $syncHash.Data.AzureUsers -ListObject $syncHash.listUsers -Identifier 'userPrincipalName'
+
+            If($syncHash.Data.AzureUsers.count -eq 0)
+            {
+                Update-UIProgress -Runspace $synchash -StatusMsg ('No users found') -PercentComplete 100 -Color 'Red'
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("No users found. Log into a different Azure tenant or credentials to retrieve Azure AD users") -Type Error
+            }
+            ElseIf($syncHash.Data.AzureUsers.count -gt 1000){
+                Update-UIProgress -Runspace $synchash -StatusMsg ("WARNING: More than 1000 users were found! Use search to reduce search criteria and click the cloud sync button again") -PercentComplete 100 -Color 'Red'
+            }
+            ElseIf(($syncHash.txtSearchUser.text.length -ge 1) -and ($syncHash.txtSearchUser.text -ne 'Search...')){
+                Update-UIProgress -Runspace $synchash -StatusMsg ('Found {0} Azure AD users based on criteria [Search "{1}" in user name]' -f $syncHash.Data.AzureUsers.count,$syncHash.txtSearchUser.text) -PercentComplete 100 -Color 'Green'
+            }
+            Else{
+                Update-UIProgress -Runspace $synchash -StatusMsg ('Found {0} Azure AD users' -f $syncHash.Data.AzureUsers.count) -PercentComplete 100 -Color 'Green'
+            }
+
+            #reset search (to allow search within current list)
+            $syncHash.btnGetUsers.Dispatcher.Invoke("Normal",[action]{
+                $syncHash.txtSearchUser.Foreground = 'Gray'
+                $syncHash.txtSearchUser.Text = 'Search...'
+            })
+
+            $this.IsEnabled = $true
+        })
+
+        # Select a User from List
+        #========================
+        #Update UI when Device is selected
+        $syncHash.listUsers.Add_SelectionChanged({
+            $syncHash.Data.SelectedUser = ($syncHash.Data.AzureUsers | Where userPrincipalName -eq $syncHash.listUsers.SelectedItem)
+            $syncHash.txtSelectedUserName.text = $syncHash.Data.SelectedUser.displayName
+            $syncHash.txtSelectedUPN.text = $syncHash.Data.SelectedUser.userPrincipalName
+            $syncHash.txtSelectedEMail.text = $syncHash.Data.SelectedUser.mail
+            $syncHash.btnAssignUser.IsEnabled = $true
+        })
+
+
+        $syncHash.btnAssignUser.Add_Click({
+            If($null -eq $syncHash.Data.SelectedDevice.deviceName){
+                $syncHash.txtStatus.Foreground = 'Brown'
+                $syncHash.txtStatus.Text = ("No device has been selected, you must select a device first!")
+            }ElseIf($syncHash.Data.SelectedUser.userPrincipalName -eq $syncHash.Data.AssignedUser.userPrincipalName){
+                $syncHash.txtStatus.Foreground = 'Brown'
+                $syncHash.txtStatus.Text = ("User [{0}] is already assigned to [{1}]. Please select a different user..." -f $syncHash.Data.SelectedUser.userPrincipalName,$syncHash.Data.SelectedDevice.deviceName)
+            }Else{
+                $syncHash.btnAssignUser.Dispatcher.Invoke("Normal",[action]{
+                    Try{
+                        Set-IDMDeviceAssignedUser -DeviceID $syncHash.Data.SelectedDevice.id -UserId $syncHash.Data.SelectedUsers.id
+                        $syncHash.txtStatus.Foreground = 'Green'
+                        $syncHash.txtStatus.Text = ("Assigned user [{0}] to device [{1}]" -f $syncHash.Data.SelectedUser.userPrincipalName,$syncHash.Data.SelectedDevice.deviceName)
+                    }Catch{
+                        $syncHash.txtStatus.Foreground = 'Red'
+                        $syncHash.txtStatus.Text = ("Failed to assign user [{0}] to device [{1}]. {2}" -f $syncHash.Data.SelectedUser.userPrincipalName,$syncHash.Data.SelectedDevice.deviceName, $_.exception.message)
+                    }
+                })
+            }
+
 
         })
 
-        # Sync Computer object from ConfigMgr
+        <# Sync Computer object from ConfigMgr
         #========================
         $syncHash.btnCMSiteSync.Add_Click({
+            #collection current location
+            Push-Location
+
             #attempt to reconnect to CM (this is only if initial connection is not made and server and code has been changed)
-            If($syncHash.txtCMSiteCode.text -and $syncHash.txtCMSiteServer.text -and ($syncHash.txtRSAT.text -eq 'No') )
+            If($syncHash.Properties.CMSiteCode -and $syncHash.Properties.CMSiteServer)
             {
-                If(Test-CMModule -CMSite $syncHash.txtCMSiteCode.text -CMSite $syncHash.txtCMSiteServer.text){
+                If(Test-CMModule -CMSite $syncHash.Properties.CMSiteCode -CMServer $syncHash.Properties.CMSiteServer){
+                    # Customizations
+                    $initParams = @{}
+                    #$initParams.Add("Verbose", $true) # Uncomment this line to enable verbose logging
+                    #$initParams.Add("ErrorAction", "Stop") # Uncomment this line to stop the script on any errors
+
+                    # Do not change anything below this line
+
+                    # Import the ConfigurationManager.psd1 module
+                    if((Get-Module ConfigurationManager) -eq $null) {
+                        Import-Module "$($ENV:SMS_ADMIN_UI_PATH)\..\ConfigurationManager.psd1" @initParams
+                    }
+
+                    # Connect to the site's drive if it is not already present
+                    if((Get-PSDrive -Name $syncHash.Properties.CMSiteCode -PSProvider CMSite -ErrorAction SilentlyContinue) -eq $null) {
+                        New-PSDrive -Name $syncHash.Properties.CMSiteCode -PSProvider CMSite -Root $syncHash.Properties.CMSiteServer @initParams
+                    }
+
+                    # Set the current location to be the site code.
+                    Set-Location "$($SiteCode):\" @initParams
+
                     $syncHash.txtRSA.text = 'Yes';$syncHash.txtRSAT.Foreground = 'Green'
-                    Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("Configuration Manager PowerShell module is installed: {0}" -f (Test-CMModule -CMSite $syncHash.txtCMSiteCode.text -CMSite $syncHash.txtCMSiteServer.text -Passthru)) -Type Info
+                    Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("Configuration Manager PowerShell module is installed: {0}" -f (Test-CMModule -CMSite $syncHash.Properties.CMSiteCode -CMSite $syncHash.Properties.CMSiteServer -Passthru)) -Type Info
                     $syncHash.btnCMDeviceSync.IsEnabled = $true
                 }Else{
                     Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("Configuration Manager PowerShell module must be installed to be able to query CM device names") -Type Error
                     $syncHash.txtRSAT.text = 'No'
-                    $syncHash.btnCMSiteDeviceSync.IsEnabled = $False
+                    $syncHash.btnCMSiteSync.IsEnabled = $False
                 }
             }
             Else{
                 Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("Configuration Manager settings are not configured, configure them to use the CM feature") -Type Warning
             }
             #grab all CM devices
-            $AllCMDevices = Get-CMDevice
+
+            $AllCMDevices = Get-CMDevice -Resource
             #determine how to filter CM devices
             switch($syncHash.cmbCMSiteAttribute.SelectedItem){
-                'SerialNumber' {$Query = "select SMS_R_System.Name, SMS_G_System_SYSTEM_ENCLOSURE.SerialNumber from  SMS_R_System inner join SMS_G_System_SYSTEM_ENCLOSURE on SMS_G_System_SYSTEM_ENCLOSURE.ResourceID = SMS_R_System.ResourceId"}
-                'MacAddress'   {}
+                'SerialNumber' {$Query = "select SMS_R_System.Name, SMS_G_System_SYSTEM_ENCLOSURE.SerialNumber from SMS_R_System inner join SMS_G_System_SYSTEM_ENCLOSURE on SMS_G_System_SYSTEM_ENCLOSURE.ResourceID = SMS_R_System.ResourceId"}
+                'MacAddress'   {$Query = "select SMS_R_System.Name, SMS_G_System_SYSTEM_ENCLOSURE.MacAddress from SMS_R_System inner join SMS_G_System_SYSTEM_ENCLOSURE on SMS_G_System_SYSTEM_ENCLOSURE.ResourceID = SMS_R_System.ResourceId"}
                 'LastLoggedOnUser' {}
                 'AssetTag'  {}
-                default {$Query = "select SMS_R_System.Name, SMS_G_System_SYSTEM_ENCLOSURE.SerialNumber from  SMS_R_System inner join SMS_G_System_SYSTEM_ENCLOSURE on SMS_G_System_SYSTEM_ENCLOSURE.ResourceID = SMS_R_System.ResourceId"}
+                default {$Query = "select SMS_R_System.Name, SMS_G_System_SYSTEM_ENCLOSURE.SerialNumber from SMS_R_System inner join SMS_G_System_SYSTEM_ENCLOSURE on SMS_G_System_SYSTEM_ENCLOSURE.ResourceID = SMS_R_System.ResourceId"}
             }
-            $CMdeviceMatch = Get-WmiObject -Query $Query -ComputerName $syncHash.txtCMSiteServer.text -Namespace "root/SMS/$($syncHash.txtCMSiteCode.text)"
+            #$CMdeviceMatch = Get-WmiObject -Query $Query -ComputerName $syncHash.Properties.CMSiteServer -Namespace "root/SMS/$($syncHash.Properties.CMSiteCode)"
             #display CM device based on matched filter
             $syncHash.txtCMSiteResult.text = $CMdeviceMatch
             #display device OU from AD (if exists)
-            $syncHash.txtADComputerDN.text = (Get-ADComputer -Name $syncHash.txtCMSiteResult.text).DistinguishedName
+            If($CMdeviceMatch){
+                $syncHash.txtADComputerDN.text = (Get-ADComputer -Identity $syncHash.txtCMSiteResult.text).DistinguishedName
+            }
+            Else{
+                Write-UIOutput -Runspace $syncHash -UIObject $syncHash.Logging -Message ("No device found using CM query [{0}]" -f $Query) -Type Error
+            }
+            # Return to previous location
+            Pop-Location
         })
+        #>
 
         # Sync Device Assignments - WORK IN PROGRESS
         #========================
@@ -1468,7 +1461,8 @@ Function Show-UIMainWindow
             switch($syncHash.cmbSearchInOptions.SelectedItem){
                 'User Root OU'  {
                     #get the root OU
-                    $SearchOU = ($syncHash.Data.ADUser.DistinguishedName -split ",",3)[2]
+                    $SearchOU = (([ADSI]"LDAP://$($syncHash.Data.ADUser.DistinguishedName)").parent).Substring(7).split(',',2)[1]
+                    #$SearchOU = $syncHash.Data.ADUser.DistinguishedName.Substring($syncHash.Data.ADUser.DistinguishedName.IndexOf('OU='))
                     $GetComputersParam += @{SearchBase=$SearchOU;searchscope='subtree'}
                 }
                 'Computers Root OU'  {
@@ -1500,7 +1494,7 @@ Function Show-UIMainWindow
             switch($syncHash.cmbQueryRule.SelectedItem){
                 'User OU Name' {
                         #get the current user OU to be used as query
-                        $syncHash.Data.QueryString = ($syncHash.Data.ADUser.DistinguishedName -split ",",3)[1] -replace 'OU=',''
+                        $syncHash.Data.QueryString = ((([ADSI]"LDAP://$($syncHash.Data.ADUser.DistinguishedName)").parent).Substring(7) -split ",",3)[0] -replace 'OU=',''
                 }
                 'User Name' {$syncHash.Data.QueryString = $syncHash.Data.ADUser.SamAccountName}
                 'User Display Name' {$syncHash.Data.QueryString = ($syncHash.Data.ADUser.displayName) -replace ' ',''}
@@ -1667,9 +1661,16 @@ Function Show-UIMainWindow
 ##*=============================================
 ##* MAIN
 ##*=============================================
-#Call UI and store it in same variable as runspace ($syncHash); allows easier troubleshooting
-$Global:syncHash = Show-UIMainWindow -XamlFile $XAMLFilePath -StylePath $StylePath -FunctionPath $FunctionPath -Properties $ParamProps -Wait
+Write-Host ""
+Write-Host ("Launching Intune Device Manager UI [ver: {0}]..." -f $version ) -ForegroundColor Cyan
+Write-Host "=========================================================================" -ForegroundColor Cyan
+Write-Host "Keyboard shortcut: " -ForegroundColor Green -NoNewline
+Write-Host "Hit " -ForegroundColor White -NoNewline
+Write-Host "ESC" -ForegroundColor Yellow -NoNewline
+Write-Host " to toggle UI to show in front of other windows" -ForegroundColor White
+Write-Host ""
 
+$Global:syncHash = Show-UIMainWindow -XamlFile $XAMLFilePath -StylePath $StylePath -FunctionPath $FunctionPath -Properties $ParamProps -Wait
 $Global:AuthToken = $syncHash.Data.AuthToken
 
 If($Global:syncHash.Error){
@@ -1680,8 +1681,8 @@ If($Global:syncHash.Error){
 }
 
 Write-Host ""
-Write-Host "Global variable now available after UI closed:" -ForegroundColor Cyan
-Write-Host "==================================================================" -ForegroundColor Cyan
+Write-Host "Global variable available after UI closed:" -ForegroundColor Cyan
+Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "Get all properties of UI, run command:" -ForegroundColor DarkGray
 Write-Host "`$Global:syncHash" -ForegroundColor Green
 Write-Host ""
@@ -1689,7 +1690,7 @@ Write-Host "Get current graph token, run command:" -ForegroundColor DarkGray
 Write-Host "`$Global:AuthToken" -ForegroundColor Green
 Write-Host ""
 Write-Host "Useful UI outputs:" -ForegroundColor Cyan
-Write-Host "==================================================================" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "To review specified properties, run command:" -ForegroundColor DarkGray
 Write-Host "`$Global:syncHash" -ForegroundColor Green -NoNewline
 Write-Host ".Properties" -ForegroundColor White
@@ -1709,6 +1710,10 @@ Write-Host ""
 Write-Host "To review selected device user details, run command:" -ForegroundColor DarkGray
 Write-Host "`$Global:syncHash" -ForegroundColor Green -NoNewline
 Write-Host ".Data.AssignedUser" -ForegroundColor White
+Write-Host ""
+Write-Host "To review the graph data output of UI, run command:" -ForegroundColor DarkGray
+Write-Host "`$Global:syncHash" -ForegroundColor Green -NoNewline
+Write-Host ".GraphData" -ForegroundColor White
 Write-Host ""
 If($Global:syncHash.AssignmentWindow.DeviceAssignments.count -gt 0){
     Write-Host "To review selected device assignments, run command:" -ForegroundColor DarkGray

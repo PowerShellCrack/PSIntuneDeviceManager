@@ -11,30 +11,12 @@ a UI to manage Intune devices, that may be more difficult to do within portal.
 - Microsoft.Graph.Authentication
 - AzureAD
 - WindowsAutopilotIntune
-- IDMCmdlets [_minimum version: **1.0.0.8**_]
+- IDMCmdlets
 
 ## Here is how you use it:
 
-### New Parameters for **IntuneDeviceManagerUI.ps1**
-| Name | Type | Default value | Help | Notes|
-|--|--|--|--|--|
-DevicePlatform|String |Windows| Filters device operating system on launch. Options are: _Windows,Android,MacOS,iOS_
-DevicePrefix |String || Filters device query on launch
-RenameEnablement |Switch||**Rename Operations:** Enables Renamer tab in UI (If devices are found)
-ManageStaleDevices|Switch|| Not working yet
-RenameRules |Hashtable |@{RuleRegex1 = '^.{0,3}';RuleRegex2 ='.{0,3}[\s+]'}|**Rename Operations:** Consist of 4 regex rules: _RuleRegex1,RuleRegex2,RuleRegex3,RuleRegex4_|Sets default regex rules on launch; can be changed within UI
-RenameAbbrType |String|Chassis|**Rename Operations:** Options are: _No Abbr,Chassis,Manufacturer,Model_|Sets default chassis check on launch; can be changed within UI
-RenameAbbrKey |String|'Laptop=A, Notebook=A, Tablet=A, Desktop=W, Tower=W, Virtual Machine=W'|**Rename Operations:** Controls what abbreviation to use when value is found based on type |Sets default abbreviation on launch; can be changed within UI
-RenamePrefix |String||**Rename Operations:** Sets default prefix on launch | can be changed within UI
-RenameAppendDigits |Int32|3|**Rename Operations:** Options are: _0,1,2,3,4, or 5_|Sets default digits to append to name on launch but can be changed within UI
-RenameSearchFilter |String||**Rename Operations:** Sets default prefix on launch| can be changed within UI
-CMSiteCode |String||Not working yet
-CMSiteServer |String||Not working yet
-AppConnect|Switch||Set to use App ID instead of UPN for MSGraph
-ApplicationId|string||Set App ID to connect with
-TenantId|string||Tenant ID needed for App ID
 
-### Parameters for **HybridDeviceRenamerUI.ps1**
+### Old Parameters (HybridDeviceRenamerUI.ps1)
 
 | Name | Type | Default value | Help | Notes|
 |--|--|--|--|--|
@@ -51,6 +33,24 @@ TenantId|string||Tenant ID needed for App ID
 |AppConnect|switch||Set to use App ID instead of UPN for MSGraph
 |ApplicationId|string||Set App ID to connect with
 |TenantId|string||Tenant ID needed for App ID
+
+### New Parameters
+| Name | Type | Default value | Help | Notes|
+|--|--|--|--|--|
+DevicePlatform|String |Windows| Filters device operating system on launch. Options are: _Windows,Android,MacOS,iOS_
+DevicePrefix |String || Filters device query on launch
+RenameEnablement |Switch||**Rename Operations:** Enables Renamer tab in UI (If devices are found)
+RenameRules |Hashtable |@{RuleRegex1 = '^.{0,3}';RuleRegex2 ='.{0,3}[\s+]'}|**Rename Operations:** Consist of 4 regex rules: _RuleRegex1,RuleRegex2,RuleRegex3,RuleRegex4_|Sets default regex rules on launch; can be changed within UI
+RenameAbbrType |String|Chassis|**Rename Operations:** Options are: _No Abbr,Chassis,Manufacturer,Model_|Sets default chassis check on launch; can be changed within UI
+RenameAbbrKey |String|'Laptop=A, Notebook=A, Tablet=A, Desktop=W, Tower=W, Virtual Machine=W'|**Rename Operations:** Controls what abbreviation to use when value is found based on type |Sets default abbreviation on launch; can be changed within UI
+RenamePrefix |String||**Rename Operations:** Sets default prefix on launch | can be changed within UI
+RenameAppendDigits |Int32|3|**Rename Operations:** Options are: _0,1,2,3,4, or 5_|Sets default digits to append to name on launch but can be changed within UI
+RenameSearchFilter |String||**Rename Operations:** Sets default prefix on launch| can be changed within UI
+CMSiteCode |String||Not working yet
+CMSiteServer |String||Not working yet
+AppConnect|Switch||Set to use App ID instead of UPN for MSGraph
+ApplicationId|string||Set App ID to connect with
+TenantId|string||Tenant ID needed for App ID
 
 To launch the script; its best to call it through PowerShell, like so:
 

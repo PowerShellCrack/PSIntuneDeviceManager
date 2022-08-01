@@ -54,15 +54,13 @@ Function Get-RunspaceIntuneDevices{
     $graphApiVersion = "beta"
     $Resource = "deviceManagement/managedDevices"
 
+    $filterQuery=$null
+
     if($IncludeEAS.IsPresent){ $Count_Params++ }
     if($ExcludeMDM.IsPresent){ $Count_Params++ }
 
     if($Count_Params -gt 1){
-
         write-warning "Multiple parameters set, specify a single parameter -IncludeEAS, -ExcludeMDM or no parameter against the function"
-        Write-Host
-        break
-
     }
 
     $Query = @()
@@ -83,7 +81,7 @@ Function Get-RunspaceIntuneDevices{
     }
 
     If($PSBoundParameters.ContainsKey('Filter')){
-        #TEST $Filter = '46VEYL1'
+        #TEST $Filter = 'admg02'
         $Query += "contains(deviceName,'$($Filter)')"
     }
 
@@ -102,8 +100,10 @@ Function Get-RunspaceIntuneDevices{
 
     $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
         try {
-
-            $Runspace.GraphData.MDMDevices = Invoke-IDMGraphRequests -Uri $uri -Headers $AuthToken -Passthru -ErrorAction Stop
+            #$runspace = $syncHash
+            #Using -Passthru with Invoke-IDMGraphRequests will out graph data including next link and context. Value contains devices. No Passthru will out value only
+            #$Runspace.GraphData.MDMDevices = Invoke-IDMGraphRequests -Uri $uri -Headers $AuthToken -Passthru -ErrorAction Stop
+            $Runspace.GraphData.MDMDevices = Invoke-IDMGraphRequests -Uri $uri -Headers $AuthToken -ErrorAction Stop
         }
         catch {
             Update-UIProgress -Runspace $Runspace -PercentComplete 100 -StatusMsg ("Response content: {0}" -f $_.Exception.Response.StatusCode) -Color Red
@@ -115,8 +115,21 @@ Function Get-RunspaceIntuneDevices{
     {
         $i=0
         $Devices = @()
-        #Populate AAD devices
-        Get-RunspaceAzureDevices -Runspace $Runspace -ParentRunspace $Runspace -AuthToken $AuthToken
+        #Populate AAD devices using splat for filter and platform to minimize seach field
+        # this is becuse if results are more than gropah will show, the results coudl be skewed.
+
+        $AzureDeviceParam = @{
+            Runspace=$Runspace
+            ParentRunspace=$Runspace
+            AuthToken=$AuthToken
+        }
+        If($PSBoundParameters.ContainsKey('Filter')){
+            $AzureDeviceParam += @{Filter = $Filter}
+        }
+        If($PSBoundParameters.ContainsKey('Platform')){
+            $AzureDeviceParam += @{Platform = $Platform}
+        }
+        Get-RunspaceAzureDevices @AzureDeviceParam
 
         #collect stale objects
         $StaleDate = (Get-Date).AddDays(-90)
@@ -158,27 +171,6 @@ Function Get-RunspaceIntuneDevices{
                     }
                     # Add the object to our array of output objects
                 }
-                <#
-                #Add additional Properties to devices
-                $OutputItem = New-Object PSObject
-                Foreach($p in $Resource | Get-Member -MemberType NoteProperty){
-                    $OutputItem | Add-Member NoteProperty $p.name -Value $Resource.($p.name)
-                }
-                #$AADObjects | Where displayName -eq 'DTOLAB-46VEYL1'
-                If($FilteredObj = $Runspace.GraphData.AADDevices | Where deviceId -eq $Resource.azureADDeviceId){
-                    # Create a new object to store this information
-                    $OutputItem | Add-Member NoteProperty "azureADObjectId" -Value $FilteredObj.id -Force
-                    $OutputItem | Add-Member NoteProperty "accountEnabled" -Value $FilteredObj.accountEnabled -Force
-                    $OutputItem | Add-Member NoteProperty "deviceVersion" -Value $FilteredObj.deviceVersion -Force
-                    $OutputItem | Add-Member NoteProperty "enrollmentProfileName" -Value $FilteredObj.enrollmentProfileName -Force
-                    $OutputItem | Add-Member NoteProperty "enrollmentType" -Value $FilteredObj.enrollmentType -Force
-                    $OutputItem | Add-Member NoteProperty "isCompliant" -Value $FilteredObj.isCompliant -Force
-                    $OutputItem | Add-Member NoteProperty "mdmAppId" -Value $FilteredObj.mdmAppId -Force
-                    $OutputItem | Add-Member NoteProperty "physicalIds" -Value $FilteredObj.physicalIds -Force
-                    $OutputItem | Add-Member NoteProperty "extensionAttributes " -Value $FilteredObj.extensionAttributes -Force
-                    # Add the object to our array of output objects
-                }
-                #>
                 $Runspace.Data.IntuneDevices += $OutputItem
             }
         })
@@ -235,10 +227,14 @@ Function Get-RunspaceAzureDevices{
 
         [Parameter(Mandatory=$false)]
         [ValidateSet('DisplayName','StartWithDisplayName','NOTStartWithDisplayName')]
-        [string]$FilterBy,
+        [string]$FilterBy = 'StartWithDisplayName',
 
         [Parameter(Mandatory=$false)]
         [string]$Filter,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateSet('Windows','Android','MacOS','iOS')]
+        [string]$Platform,
 
         [Parameter(Mandatory=$false)]
         $AuthToken = $Global:AuthToken,
@@ -246,30 +242,46 @@ Function Get-RunspaceAzureDevices{
         [switch]$Passthru
     )
     Begin{
-
         # Defining Variables
         $graphApiVersion = "beta"
         $Resource = "devices"
-        If($FilterBy -and $Filter){
-            switch($FilterBy){
-                'DisplayName' {$uri = "https://graph.microsoft.com/beta/devices?`$filter=displayName eq '$Filter'"}
 
-                'StartWithDisplayName' {$uri = "https://graph.microsoft.com/beta/devices?`$filter=startswith(displayName, '$Filter')"}
-
-                'NOTStartWithDisplayName'{ $uri = "https://graph.microsoft.com/beta/devices?`$filter=NOT startsWith(displayName, '$Filter')"}
-            }
-
-        }Else{
-            $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource"
+        If($FilterBy -eq 'SearchDisplayName' -and -NOT($AuthToken['ConsistencyLevel'])){
+            $AuthToken += @{ConsistencyLevel = 'eventual'}
         }
+
+        $filterQuery=$null
     }
     Process{
+        $Query = @()
+
+        If($PSBoundParameters.ContainsKey('Platform')){
+            $Query += "operatingSystem eq '$($Platform)'"
+        }
+
+        If($PSBoundParameters.ContainsKey('Filter')){
+             switch($FilterBy){
+                'DisplayName' {$Query += "displayName eq '$Filter'";$Operator='filter'}
+                'StartWithDisplayName' {$Query += "startswith(displayName, '$Filter')";$Operator='filter'}
+                'NOTStartWithDisplayName' {$Query += "NOT startsWith(displayName, '$Filter')";$Operator='filter'}
+                'SearchDisplayName' {$Query += "`"displayName:$Filter`"";$Operator='search'}
+            }
+        }
+
+        #build query filter if exists
+        If($Query.count -ge 1){
+            $filterQuery = "`?`$$Operator=" + ($Query -join ' and ')
+        }
+
+        $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource" + $filterQuery
+
         Write-UIOutput -UIObject $ParentRunspace.Logging -Message ("Retrieving data from URI: {0}" -f $uri) -Type Info
 
         $Runspace.Window.Dispatcher.Invoke("Normal",[action]{
             try {
-                #$Runspace.GraphData.AADDevices = (Invoke-RestMethod -Uri $uri -Headers $AuthToken -Method Get -ErrorAction Stop).value
-                $Runspace.GraphData.AADDevices = Invoke-IDMGraphRequests -Uri $uri -Headers $AuthToken -Passthru -ErrorAction Stop
+                #Using -Passthru with Invoke-IDMGraphRequests will out graph data including next link and context. Value contains devices. No Passthru will out value only
+                #$Runspace.GraphData.MDMDevices = Invoke-IDMGraphRequests -Uri $uri -Headers $AuthToken -Passthru -ErrorAction Stop
+                $Runspace.GraphData.AADDevices = Invoke-IDMGraphRequests -Uri $uri -Headers $AuthToken -ErrorAction Stop
             }
             catch {
                 Update-UIProgress -Runspace $Runspace -PercentComplete 100 -StatusMsg ("Response content: {0}" -f $_.Exception.Response.StatusCode) -Color Red
@@ -389,7 +401,9 @@ Function Get-RunspaceIntuneAssignments{
     #Add component URIs
     $UriResources += $PlatformComponents | %{ "https://graph.microsoft.com/$graphApiVersion/$($_)"}
 
-    $GraphRequests = $UriResources | Invoke-IDMGraphRequests -Headers $AuthToken -Threads $UriResources.Count -Passthru
+    #Using -Passthru with Invoke-IDMGraphRequests will out graph data including next link and context. Value contains devices. No Passthru will out value only
+    #$Runspace.GraphData.MDMDevices = Invoke-IDMGraphRequests -Uri $uri -Headers $AuthToken -Passthru -ErrorAction Stop
+    $GraphRequests = $UriResources | Invoke-IDMGraphRequests -Headers $AuthToken -Threads $UriResources.Count
 
     If($PSBoundParameters.ContainsKey('ParentRunspace')){
         $ParentRunspace.Window.Dispatcher.Invoke("Normal",[action]{
@@ -413,8 +427,6 @@ Function Get-RunspaceIntuneAssignments{
     #combine device and users memberships
     $AllGroupMembers = @()
     $AllGroupMembers = $DeviceGroupMembers + $UserGroupMembers
-
-
 
     <#
     $GraphRequests.'@odata.type' | Select -unique
@@ -440,7 +452,7 @@ Function Get-RunspaceIntuneAssignments{
     $PlatformResources.type
     #>
     #get Assignments of all resource suing multithreading
-    $ResourceAssignments = $PlatformResources | %{ $_.uri + '/' + $_.id + '/assignments'} | Invoke-IDMGraphRequests -Headers $AuthToken -Passthru
+    $ResourceAssignments = $PlatformResources | %{ $_.uri + '/' + $_.id + '/assignments'} | Invoke-IDMGraphRequests -Headers $AuthToken
     #$ResourceAssignments.count
 
 

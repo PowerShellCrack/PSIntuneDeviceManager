@@ -103,7 +103,7 @@ Function Set-UIProperty{
 }
 #endregion
 
-Function Search-UIDeviceList{
+Function Search-UIList{
     Param(
         [Parameter(Mandatory = $true)]
         $ItemsList,
