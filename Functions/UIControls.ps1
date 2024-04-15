@@ -805,10 +805,6 @@ Function Show-UIAssignmentsWindow {
 
         $ParentSyncHash,
 
-        [Parameter(Mandatory=$false,ParameterSetName='PreloadData')]
-        [Parameter(Mandatory=$true,ParameterSetName='PreLoadId')]
-        $AuthToken,
-
         [Parameter(Mandatory=$false)]
         [switch]$IncludeInherited,
 
@@ -830,7 +826,6 @@ Function Show-UIAssignmentsWindow {
     $syncHash.UserData = $UserData
     $syncHash.UserAssignments = $UserAssignments
     $syncHash.Scripts = $SupportScripts
-    $syncHash.AuthToken = $AuthToken
     $syncHash.AssignmentData = @()
     $ASPRunSpace.ApartmentState = "STA"
     $ASPRunSpace.ThreadOptions = "ReuseThread"
@@ -1086,21 +1081,24 @@ Function Show-UIAssignmentsWindow {
 
 
         $syncHash.cmbFilterColumns.Add_SelectionChanged({
-            #sort it
-            $syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Sort $syncHash.cmbFilterColumns.SelectedItem)
-            #first sort data by selected item
-            #$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Sort $syncHash.cmbFilterColumns.SelectedItem)
-            #build values for next item
-            $syncHash.cmbFilterValues.Items.Clear()
-            ($syncHash.lstDeviceAssignments.ItemsSource).($syncHash.cmbFilterColumns.SelectedItem) | Select -Unique | %{$syncHash.cmbFilterValues.Items.Add($_) | Out-Null}
-            #enable extra filters
-            $syncHash.cmbFilterOperators.IsEnabled = $true
-            $syncHash.cmbFilterValues.IsEnabled = $true
-            $syncHash.btnReset.IsEnabled = $true
-            #set default
-            $syncHash.cmbFilterOperators.SelectedItem = "include"
-            #set label
-            $syncHash.lblFilterColumn.Content = ("Find item where " + ($syncHash.cmbFilterColumns.SelectedItem).ToUpper())
+
+            If($syncHash.cmbFilterColumns.SelectedItem){
+                #sort it
+                $syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Sort $syncHash.cmbFilterColumns.SelectedItem)
+                #first sort data by selected item
+                #$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Sort $syncHash.cmbFilterColumns.SelectedItem)
+                #build values for next item
+                $syncHash.cmbFilterValues.Items.Clear()
+                ($syncHash.lstDeviceAssignments.ItemsSource).($syncHash.cmbFilterColumns.SelectedItem) | Select -Unique | %{$syncHash.cmbFilterValues.Items.Add($_) | Out-Null}
+                #enable extra filters
+                $syncHash.cmbFilterOperators.IsEnabled = $true
+                $syncHash.cmbFilterValues.IsEnabled = $true
+                $syncHash.btnReset.IsEnabled = $true
+                #set default
+                $syncHash.cmbFilterOperators.SelectedItem = "include"
+                #set label
+                $syncHash.lblFilterColumn.Content = ("Find item where " + ($syncHash.cmbFilterColumns.SelectedItem).ToUpper())
+            }
         })
 
         $syncHash.cmbFilterOperators.Add_SelectionChanged({
@@ -1112,14 +1110,16 @@ Function Show-UIAssignmentsWindow {
         })
 
         $syncHash.cmbFilterValues.Add_SelectionChanged({
-            #filter it based on operator
-            switch($syncHash.cmbFilterOperators.SelectedItem){
-                "include" {$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -eq $syncHash.cmbFilterValues.SelectedItem})}
-                "exclude" {$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -ne $syncHash.cmbFilterValues.SelectedItem})}
-                default {$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -eq $syncHash.cmbFilterValues.SelectedItem})}
+            If($syncHash.cmbFilterValues.SelectedItem){
+                #filter it based on operator
+                switch($syncHash.cmbFilterOperators.SelectedItem){
+                    "include" {$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -eq $syncHash.cmbFilterValues.SelectedItem})}
+                    "exclude" {$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -ne $syncHash.cmbFilterValues.SelectedItem})}
+                    default {$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -eq $syncHash.cmbFilterValues.SelectedItem})}
+                }
+                #$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -eq $syncHash.cmbFilterValues.SelectedItem})
+                $syncHash.lblFilterValue.Content = $syncHash.cmbFilterValues.SelectedItem.ToUpper()
             }
-            #$syncHash.lstDeviceAssignments.ItemsSource = ($syncHash.AssignmentData | Where {$_.($syncHash.cmbFilterColumns.SelectedItem) -eq $syncHash.cmbFilterValues.SelectedItem})
-            $syncHash.lblFilterValue.Content = $syncHash.cmbFilterValues.SelectedItem.ToUpper()
         })
 
         $syncHash.btnReset.Add_Click({
@@ -1147,20 +1147,20 @@ Function Show-UIAssignmentsWindow {
             $syncHash.lstDeviceAssignments.ItemsSource.Clear()
             Update-UIProgress -Runspace $syncHash -StatusMsg ("Please wait while loading device and user assignment data, this can take a while...") -Indeterminate
 
-            $syncHash.Window.Dispatcher.Invoke("Normal",[action]{
+            $syncHash.btnAssignments.Dispatcher.Invoke("Normal",[action]{
 
                 #$syncHash.DeviceData = Get-IDMDevice -Filter $syncHash.txtDeviceName.Text -AuthToken $syncHash.AuthToken -Expand
-                If($syncHash.DeviceData = Get-IDMDevice -Filter $syncHash.txtDeviceName.Text -AuthToken $syncHash.AuthToken -Expand)
+                If($syncHash.DeviceData = Get-IDMDevice -Filter $syncHash.txtDeviceName.Text -Expand)
                 {
                     If([string]::IsNullOrEmpty($syncHash.txtAssignedUPN.Text)){
                         $syncHash.txtAssignedUPN.Text = $syncHash.DeviceData.userPrincipalName
                     }
-                    $syncHash.UserData = Get-IDMDeviceAADUser -UPN $syncHash.txtAssignedUPN.Text
+                    $syncHash.UserData = Get-IDMAzureUser -UPN $syncHash.txtAssignedUPN.Text
 
                     $Global:AssignmentList = Get-IDMIntuneAssignments `
                                                         -Platform $syncHash.DeviceData.OperatingSystem `
                                                         -TargetSet @{devices=$syncHash.DeviceData.azureADObjectId;users=$syncHash.UserData.id} `
-                                                        -AuthToken $syncHash.AuthToken -IncludePolicySetInherits
+                                                        -IncludePolicySetInherits
 
                     #Set global list so other elements can use it
                     $syncHash.AssignmentData = $Global:AssignmentList
@@ -1219,7 +1219,7 @@ Function Show-UIAssignmentsWindow {
             $Global:AssignmentList = Get-IDMIntuneAssignments `
                                                     -Platform $syncHash.DeviceData.OperatingSystem `
                                                     -TargetSet @{devices=$syncHash.DeviceData.azureADObjectId;users=$syncHash.UserData.id} `
-                                                    -AuthToken $syncHash.AuthToken -IncludePolicySetInherits
+                                                    -IncludePolicySetInherits
 
             #Set global list so other elements can use it
             $syncHash.AssignmentData = $Global:AssignmentList

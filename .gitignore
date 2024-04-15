@@ -8,3 +8,6 @@ Autopilot.ps1
 MSGraph.ps1
 *.zip
 Tests.ps1
+*secret*
+*dtolab*
+*dtogov*

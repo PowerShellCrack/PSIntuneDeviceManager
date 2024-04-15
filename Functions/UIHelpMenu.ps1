@@ -16,10 +16,10 @@ $syncHash.tbADSearchHelp.Add_MouseLeave({
     Clear-PopupContent -FlowDocumentObject $syncHash.PopupContent
 })
 
-$syncHash.tbCMSiteSearchHelp.Add_MouseEnter({
+$syncHash.tbAssignUserHelp.Add_MouseEnter({
     $PopupContexts = @{
-        Help = @("Fill in CM site server and Site code to connect to ConfigMgr")
-        Tip = @("Specify the attribute used to determine if device is a match")
+        Help = @("Use search engine to filter Azure users and click the cloud sync button")
+        Tip = @("The filter will work before or after the cloud sync. ")
     }
     Add-PopupContent -FlowDocumentObject $syncHash.PopupContent -ContextHash $PopupContexts
     $syncHash.HelpPopup.VerticalOffset="240"
@@ -27,7 +27,7 @@ $syncHash.tbCMSiteSearchHelp.Add_MouseEnter({
     $syncHash.HelpPopup.IsOpen = $true
 })
 
-$syncHash.tbCMSiteSearchHelp.Add_MouseLeave({
+$syncHash.tbAssignUserHelp.Add_MouseLeave({
     $syncHash.HelpPopup.IsOpen = $false
     Clear-PopupContent -FlowDocumentObject $syncHash.PopupContent
 })

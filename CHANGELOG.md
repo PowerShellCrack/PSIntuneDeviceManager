@@ -1,12 +1,32 @@
 # Change log for IntuneDeviceManagerUI.ps1
 
+## 2.0.2 - April 14, 2024
+
+- Removed Authtoken check; no longer need with Graph modules
+- Fixed Device retrieval. Used newer IDMCmdlets. 
+
+## 1.5.1 - August 8, 2022
+
+- Updared readme.
+- Validated script still works
+
+## 1.5.1 - August 8, 2022
+
+- Changed date output to actual date format; better readability
+- Added Admin Consent switch to script; to allow global admin permissions
+- Added the ability to update device extension attributes; does require AdminConsent
+- Added more height to UI to account for additional features.
+
+## 1.5.0 - August 5, 2022
+
+- Using new IDMcmdlet 1.0.1.2 for Batch processing; speeds up graph output
+
 ## 1.4.9 - July 31, 2022
 - Cleanup up UI slightly; removed module check and changed to connect user and organized xaml content
 - Must use IDMcmdlet 1.0.0.8; supports new graph batch and multithreaded Graph requests
 - Added ability to assign new user to device; replaced configmgr device detection
 - Added more context to listing devices and users to show status
 - Added helper scripts to contain handlers and help menu; reduce lines in main code.
-
 
 ## 1.4.8 - July 30, 2022
 - changed Module check to hashtable to incorporate versions

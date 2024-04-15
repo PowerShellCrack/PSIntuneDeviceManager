@@ -193,3 +193,18 @@ $syncHash.txtSearchStaleDevices.Add_LostFocus({
         $syncHash.txtSearchStaleDevices.Text = 'Search...'
     }
 })
+
+
+#ACTIVATE BUTTON
+$syncHash.txtDeviceExtensionValue.AddHandler(
+    [System.Windows.Controls.Primitives.TextBoxBase]::TextChangedEvent,
+    [System.Windows.RoutedEventHandler]{
+        If($syncHash.txtDeviceExtensionValue.text.length -gt 0){
+            $syncHash.btnDeviceExtensionChange.IsEnabled = $true
+            $syncHash.btnDeviceExtensionChange.Content = 'Update Extension'
+        }Else{
+            $syncHash.btnDeviceExtensionChange.IsEnabled = $true
+            $syncHash.btnDeviceExtensionChange.Content = 'Clear Extension'
+        }
+    }
+)
