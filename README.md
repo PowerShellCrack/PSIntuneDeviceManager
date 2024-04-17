@@ -111,6 +111,10 @@ Once the UI is launched, here are the steps to perform:
 
 ## For Rename Operations
 
+> NOTE: must use _-RenameEnablement_ parameter
+
+![Rename](.images/UIWindow_DeviceRename.jpg)
+
 1. Click Renamer Tab
 
 2. Click on the Sync button to corelate the Azure account with the AD account.
@@ -131,6 +135,12 @@ Once the UI is launched, here are the steps to perform:
     a. If you refresh the list and select the same device again; a warning message will come up near bottom of screen stating there is a pending rename action.
     b. You can also check Intune and see the same action.
 
+## Stale Devices (Not Working)
+
+> NOTE: must use _-ManageStaleDevices_ parameter
+
+![Stale](.images/UIWindow_StaleDevice.jpg)
+
 ## For Retrieving Assignments
 
 1. Select a device
@@ -138,8 +148,6 @@ Once the UI is launched, here are the steps to perform:
 2. Click Details Tab
 
 3. Click Get Assignments
-
-
 
 > NOTE: this may take a while to load, depending on objects in Intune and Azure. The UI may look like its not responding (its not a multithreaded UI...yet). Once complete though a screen will come up:
 
@@ -178,6 +186,8 @@ $global:syncHash.error
 - ** Azure government support not working
 - *** Some logging is missing
 - Configuration Manager connection sync for assignments
+- Get Assignments are no longer working since move to new Grpah SDK. Working issue as of 4/1/2024
+- Stale device no longer retrieves devices, working issue as of 4/1/2024
 
 
 # DISCLAIMER
